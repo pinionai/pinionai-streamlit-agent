@@ -24,7 +24,7 @@ dependencies = [
     # Core Application & Framework
     "streamlit",
     "Pillow",
-    "pinionai",  # PinionAI Client Core
+    "pinionai[all]",  # PinionAI Client Core
 
     # Google Cloud & Vertex AI
     "google-cloud-logging",
@@ -44,4 +44,7 @@ twilio = ["twilio"]
 all = [
     "pinionai-chat[aws,gcp,openai,javascript,twilio,sendgrid]",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
 
