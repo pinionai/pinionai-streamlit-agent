@@ -1,0 +1,14 @@
+# This file is used by `uv pip compile` to generate requirements.txt.
+# To update dependencies, modify pyproject.toml and then run:
+# uv pip compile requirements.in -o requirements.txt
+#
+# This file tells uv to look at pyproject.toml and install the current
+# project in editable mode (-e .) along with all its "dev" extras.
+
+# For PyPI install (default)
+# pinionai
+
+# For development GitHub install (uncomment if you want to install from GitHub instead)
+# git+https://github.com/pinionai/pinionai-package.git
+
+-e .[dev]

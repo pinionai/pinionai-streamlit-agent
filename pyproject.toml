@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pinionai-chat"
+version = "0.1.0"
+description = "PinionAI Cloud Run application utilizing Streamlit Framework."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [
+    { name="Alan Johnson", email="alan@pinionai.com" },
+    { name="PinionAI", email="info@pinionai.com" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    # Core Application & Framework
+    "streamlit",
+    "Pillow",
+    "pinionai",  # PinionAI Client Core
+
+    # Google Cloud & Vertex AI
+    "google-cloud-logging",
+
+    # MCP Server Dependencies (e.g., for weather_server.py)
+    "geopy",
+]
+
+[project.optional-dependencies]
+gcp = ["google-cloud-storage"]
+aws = ["boto3"]
+openai = ["openai"]
+anthropic = ["anthropic"]
+javascript = ["mini-racer"]
+sendgrid = ["sendgrid"]
+twilio = ["twilio"]
+all = [
+    "pinionai-chat[aws,gcp,openai,javascript,twilio,sendgrid]",
+]
+
