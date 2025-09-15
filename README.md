@@ -6,7 +6,46 @@ This application uses the [Streamlit](https://streamlit.io/) framework, Pinionai
 
 To run the Streamlit Application locally (on cloud shell), we need to perform the following steps:
 
-1. Setup the Python virtual environment and install the dependencies:
+1. Decisions, decisions... By default, the application will install `pinionai` from PyPI. First thing to know is that pinionai will include a number of dependencies, but also can also install optional dependencies. Depending on what you plan to use in your agents, you should consider which optional libraries you might want to install.
+
+Edit the `pyproject.toml`, before generating the requirements.txt and pip install. By default, `pinionai[all]` is installed, but there are additional options or changes you can make.
+
+## Optional Features
+
+The client includes optional features that require extra dependencies. You can install them as needed based on the services you intend to use.
+
+- gcp: Google Cloud Storage support (google-cloud-storage)
+- aws: AWS S3 support (boto3)
+- openai: Support for OpenAI models (openai)
+- anthropic: Support for Anthropic models (anthropic)
+- javascript: Support for running JavaScript snippets (mini-racer)
+- sendgrid: Support for running sendgrid delivery (twiliio service)
+- twilio: Support for sms delivery
+
+To install one or more optional features, specify them in brackets. For example, to get support for GCP and AWS:
+
+```bash
+pip install pinionai[gcp,aws]
+```
+
+To install all optional features at once, use the `all` extra:
+
+```bash
+pip install pinionai[all]
+```
+
+- gcp = ["google-cloud-storage"]
+- aws = ["boto3"]
+- openai = ["openai"]
+- anthropic = ["anthropic"]
+- javascript = ["mini-racer"]
+- sendgrid = ["sendgrid"]
+- twilio = ["twilio"]
+- all = [
+  "pinionai[gcp,aws,openai,anthropic,javascript,twilio,sendgrid]"
+  ]
+
+2. Setup the Python virtual environment and install the dependencies:
 
    In Cloud Shell, execute the following commands:
 
@@ -27,13 +66,7 @@ uv pip sync requirements.txt
 > [!TIP]
 > uv is a modern, extremely fast Python package installer from the creators of ruff. If you don't have it, you can install it with pip install uv or by following the official installation guide. Using uv can significantly speed up environment creation and dependency installation.
 
-\*Key for ADC locally.
-
-```bash
-   gcloud auth application-default login
-```
-
-2. Your application requires access to a few environment variables, see the .env.example file. Use this dotenv file as a template. Copy it to `.env` and fill in your actual credentials, and do not commit it to version control.
+3. Your application requires access to a few environment variables, see the .env.example file. Use this dotenv file as a template. Copy it to `.env` and fill in your actual credentials, and do not commit it to version control.
 
    - client_id = '<YOUR_CLIENT_ID_HERE>'
    - client_secret = '<YOUR_CLIENT_SECRET_HERE>'
@@ -45,7 +78,13 @@ uv pip sync requirements.txt
 
    **NOTE**: AI Agent LLM keys, GCP_PROJECT and many other variables are set within PinionAI Studio itself. You will need to configure these to run your agent.
 
-3. To run the application locally, execute the following command:
+4. To run the application locally, execute the following commands:
+
+\*Key for google ADC to fun locally.
+
+```bash
+   gcloud auth application-default login
+```
 
 ```bash
    streamlit run chat.py
@@ -97,8 +136,6 @@ To deploy the Streamlit Application in [Cloud Run](https://cloud.google.com/run/
    gcloud builds submit --tag "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$AR_REPO/$SERVICE_NAME"
    ```
 
-````
-
    You may also want to build and deploy manually, by performing the following:
 
    ```bash
@@ -126,10 +163,7 @@ You may also choose to deploy manually in Google Cloud Console.
 
 On successful deployment, you will be provided a URL to the Cloud Run service. You can visit that in the browser to view the Cloud Run application that you just deployed.
 
-
-## Installing pinionai
+## Installing Development Pinionai
 
 By default, the application will install `pinionai` from PyPI.
 If you want to install the latest development version from GitHub, comment out the `pinionai` line in `requirements.in` (or `requirements.txt`) and uncomment the GitHub line.
-
-````
