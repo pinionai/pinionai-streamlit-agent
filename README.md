@@ -80,7 +80,7 @@ uv pip sync requirements.txt
 
 4. To run the application locally, execute the following commands:
 
-\*Key for google ADC to fun locally.
+\*Key for google ADC to run gemini LLM locally.
 
 ```bash
    gcloud auth application-default login

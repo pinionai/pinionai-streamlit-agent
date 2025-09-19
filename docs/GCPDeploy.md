@@ -140,3 +140,38 @@ During the deployment process, `gcloud` will prompt you to confirm the settings.
 ### 8. Access Your Application
 
 Once the deployment is complete, you can access your Streamlit application by navigating to the **Service URL** provided in the command-line output.
+
+### 9. Maintain 'Always On' Service
+
+To keep a Cloud Run server running without it shutting down due to inactivity, you must set a minimum number of instances to maintain a warm, ready state even when there's no traffic, or use manual scaling to keep a specific number of instances running all the time. You should also ensure your application is configured for instance-based billing to support potential background activities and not rely on scaling to zero.
+
+1. **Configure minimum instances.**
+
+run gcloud CLI:
+
+```bash
+gcloud run services update SERVICE_NAME --min-instances=1
+```
+
+OR
+
+- Navigate to your Cloud Run service: in the Google Cloud console.
+- Edit the service.
+- Adjust the "Minimum number of instances" setting: to a value greater than zero. This tells Cloud Run to keep at least that many instances running, even when they are idle.
+- Save the changes: to deploy the updated configuration.
+
+2. **Consider CPU always allocated** Additionally, this feature ensures that a container instance's CPU is fully available for background processing, not just during request handling. It is typically used in combination with minimum instances.
+
+- In Google Cloud Console: In the service editor, navigate to the Container, networking, security section. In the Container tab, select CPU is always allocated.
+- In gcloud CLI:
+
+```bash
+gcloud run services update SERVICE_NAME --cpu-throttling --cpu-throttling=never
+```
+
+3. **Other important considerations**
+
+- `Instance-based billing`: Make sure your Cloud Run service is configured for instance-based billing so you can run background activities and not risk your service scaling to zero.
+- `Costs`: Keeping instances running will incur costs, even when they are idle. You should weigh your performance requirements against your budget.
+- `Application design`: Optimize your application by moving initialization logic to the container's global scope to reduce latency for subsequent requests after a cold start.
+- `Monitor memory and CPU`: Keep an eye on your memory limits and CPU utilization to prevent application crashes or unexpected shutdowns.
