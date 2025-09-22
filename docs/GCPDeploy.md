@@ -10,15 +10,11 @@ This guide provides step-by-step instructions on how to deploy the Pinion AI cha
 
 Before you begin, ensure you have the following installed and configured:
 
-1.  **Google Cloud SDK (`gcloud` CLI):** Installation Guide
-2.  **Docker:** Installation Guide
+1.  **Google Cloud SDK (`gcloud` CLI):** Google Cloud CLI is installed and configured.
+2.  **Docker:** Docker is installed.
 3.  A Google Cloud Project. If you don't have one, create one in the Google Cloud Console.
 
-## Deployment Steps
-
-### 1. Set Up Your Environment
-
-First, log in to your Google Cloud account and set your project.
+Log in to your Google Cloud account and set your project.
 
 ```bash
 gcloud auth login
@@ -27,7 +23,55 @@ gcloud config set project YOUR_PROJECT_ID
 
 Replace `YOUR_PROJECT_ID` with your actual Google Cloud project ID.
 
-Next, define some environment variables to make the following commands easier to manage. Choose a region that supports Cloud Run.
+### Step 1: Create a Dedicated Service Account
+
+First, create a new, dedicated service account for your Cloud Run service. This ensures the service has only the permissions it needs, following the principle of least privilege.
+
+```bash
+# Set environment variables for your project and desired service account name
+export PROJECT_ID=$(gcloud config get-value project)
+export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
+
+# Create the service account
+gcloud iam service-accounts create "${SERVICE_ACCOUNT_NAME}" \
+    --display-name="Cloud Run PinionAI Client Service Account" \
+    --project="${PROJECT_ID}"
+```
+
+### Step 2: Grant Necessary IAM Roles
+
+Next, grant the required IAM roles to the new service account. These permissions allow the service to interact with Vertex AI, Cloud Storage, and use the enabled APIs.
+
+```bash
+# Get the full email address of the service account
+export SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# To execute Gemini prompts and use RAG Stores
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/aiplatform.user"
+
+# Grant the Storage Object Admin role for uploading files to GCS
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/storage.objectAdmin"
+
+# Grant the Service Usage Consumer role to allow using the APIs
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/serviceusage.serviceUsageConsumer"
+
+# OPTIONAL Grant the Vertex AI Editor role for RAG ingestion and generation - Used in PinionAI studio, but not client.
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/aiplatform.editor"
+```
+
+## Deployment Steps
+
+### 1. Set Up Your Environment
+
+Define some environment variables to make the following commands easier to manage. Choose a region that supports Cloud Run.
 
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
@@ -97,6 +141,8 @@ docker push ${IMAGE_URI}
 
 Deploy your container image to Cloud Run and pass the environment variables from your `.env` file. You can specify each variable using the `--set-env-vars` flag, or use the `--env-vars-file` flag with a YAML file.
 
+Use the `--service-account` flag to specify the identity your service will run as.
+
 **Option 1: Using `--set-env-vars`**
 
 Extract the variables from your `.env` file and pass them as a comma-separated list:
@@ -105,10 +151,12 @@ Extract the variables from your `.env` file and pass them as a comma-separated l
 gcloud run deploy ${IMAGE_NAME} \
     --image=${IMAGE_URI} \
     --port=8080 \
+    --service-account=${SERVICE_ACCOUNT_EMAIL} \
+    --project=${PROJECT_ID} \
     --region=${REGION} \
     --platform=managed \
     --allow-unauthenticated \
-    --set-env-vars client_id=123456,client_secret=654321,etc
+    --set-env-vars client_id=123456,client_secret=654321,etc...
 ```
 
 **Option 2: Using an Environment Variables YAML File**
@@ -129,6 +177,8 @@ Then deploy with:
 gcloud run deploy ${IMAGE_NAME} \
     --image=${IMAGE_URI} \
     --port=8080 \
+    --service-account=${SERVICE_ACCOUNT_EMAIL} \
+    --project=${PROJECT_ID} \
     --region=${REGION} \
     --platform=managed \
     --allow-unauthenticated \
@@ -136,6 +186,12 @@ gcloud run deploy ${IMAGE_NAME} \
 ```
 
 During the deployment process, `gcloud` will prompt you to confirm the settings. Once you confirm, it will deploy the service and provide you with a **Service URL**.
+
+### Important Note: Vertex AI Service Agent Permissions
+
+For PinionAI Studio RAG file ingestion (`rag.import_files()`) to succeed, the **Vertex AI Service Agent** (a Google-managed service account) must have permission to read files from your Google Cloud Storage bucket.
+
+This permission is usually granted automatically when you enable the Vertex AI API. However, if you encounter `Permission Denied` errors during ingestion, ensure the Vertex AI Service Agent has the `Storage Object Viewer` (`roles/storage.objectViewer`) role on your project.
 
 ### 8. Access Your Application
 
