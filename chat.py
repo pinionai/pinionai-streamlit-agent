@@ -57,7 +57,8 @@ def poll_for_updates(client: AsyncPinionAIClient, timeout: int, http_poll_start:
 
 # --- Initialize PinionAIClient ---
 if "pinion_client" not in st.session_state:
-    st.session_state.version = None  # Change to serve desired version, None loads latest.
+    # Change to serve desired version (draft, development, test, live, archived), None loads in progress latest.
+    st.session_state.version = None 
     try:
         st.session_state.pinion_client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
             agent_id=os.environ.get("agent_id_stocks"),
