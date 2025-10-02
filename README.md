@@ -2,7 +2,7 @@
 
 This application uses the [Streamlit](https://streamlit.io/) framework, Pinionai python library to serve Agents you author in PinionAI studio.
 
-## About the application
+## LOCALLY Running your AI Agent
 
 To run the Streamlit Application locally (on cloud shell), we need to perform the following steps:
 
@@ -71,12 +71,14 @@ uv pip sync requirements.txt
    - client_id = '<YOUR_CLIENT_ID_HERE>'
    - client_secret = '<YOUR_CLIENT_SECRET_HERE>'
    - agent_id = '<YOUR_AGENT_ID_HERE>'
-   - host_url = '<YOUR_HOST_URL_HERE>'
-   - WEBSOCKET_URL = '<YOUR_WEBSOCKET_URL_HERE>'
+   - host_url = 'https://microservice-72loomfx5q-uc.a.run.app'
+   - WEBSOCKET_URL = 'https://pinionai-grpc-server-72loomfx5q-uc.a.run.app'
 
    `client_id` and `client_secret` are found within your PinionAI Studio application. You can generate a new client secret in the PinionAI Studio portal if desired. `agent_id `is the unique identifier of the AI agent you create in PinionAI Studio and want to serve. `host_url` is the location of PinionAI API server. `WEBSOCKET_URL` is to facilitate live agent chats, and will match the Pinion AI gRPC server address and port.
 
    **NOTE**: AI Agent LLM keys, GCP_PROJECT and many other variables are set within PinionAI Studio itself. You will need to configure these to run your agent.
+
+   **NOTE:** Do not commit your `.env` file to version control if it contains sensitive information. Add `.env` to your `.gitignore`.
 
 4. To run the application locally, execute the following commands:
 
@@ -90,80 +92,238 @@ uv pip sync requirements.txt
    streamlit run chat.py
 ```
 
-Or with limited seurity:
+The application will startup and you will be provided a local URL to the application.
+
+# PRODUCTION Deploy AI Agent to Google Cloud Run
+
+This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
+
+## Prerequisites
+
+Before you begin, ensure you have the following installed and configured:
+
+1.  **Google Cloud SDK (`gcloud` CLI):** Google Cloud CLI is installed and configured.
+2.  **Docker:** Docker is installed.
+3.  A Google Cloud Project. If you don't have one, create one in the Google Cloud Console.
+
+Log in to your Google Cloud account and set your project.
 
 ```bash
-streamlit run chat.py \
-   --browser.serverAddress=localhost \
-   --server.enableCORS=false \
-   --server.enableXsrfProtection=false \
-   --server.port 8080
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
 ```
 
-The application will startup and you will be provided a URL to the application.
+Replace `YOUR_PROJECT_ID` with your actual Google Cloud project ID.
 
-## Build and Deploy the Application to Cloud Run
+### Step 1: Create a Dedicated Service Account (only need to do this once)
 
-> Ensure that you have cloned this repository and you are currently in the `pinionai-streamlit-agent` folder. This should be your active working directory for the rest of the commands.
+First, create a new, dedicated service account for your Cloud Run service. This ensures the service has only the permissions it needs, following the principle of least privilege.
 
-To deploy the Streamlit Application in [Cloud Run](https://cloud.google.com/run/docs/quickstarts/deploy-container), we need to perform the following steps:
+```bash
+# Set environment variables for your project and desired service account name
+export PROJECT_ID=$(gcloud config get-value project)
+export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
 
-1. Your Cloud Run app requires access to two environment variables:
+# Create the service account
+gcloud iam service-accounts create "${SERVICE_ACCOUNT_NAME}" \
+    --display-name="Cloud Run PinionAI Client Service Account" \
+    --project="${PROJECT_ID}"
+```
 
-   - `GCP_PROJECT` : This the Google Cloud project ID.
-   - `GCP_REGION` : This is the region in which you are deploying your Cloud Run app. For e.g. us-central1.
+### Step 2: Grant Necessary IAM Roles (only need to do this once)
 
-   These variables are needed since the Vertex AI initialization needs the Google Cloud project ID and the region. The specific code line from the `chat.py`
+Next, grant the required IAM roles to the new service account. These permissions allow the service to interact with Vertex AI, Cloud Storage, and use the enabled APIs.
 
-   In Cloud Shell, execute the following commands:
+```bash
+# Get the full email address of the service account
+export SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
-   ```bash
-   export GCP_PROJECT='<Your GCP Project Id>'  # Change this
-   export GCP_REGION='us-central1'             # If you change this, make sure the region is supported.
-   ```
+# To execute Gemini prompts and use RAG Stores
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/aiplatform.user"
 
-2. Now you can build the Docker image for the application and push it to Artifact Registry. To do this, you will need one environment variable set that will point to the Artifact Registry name. Included in the script below is a command that will create this Artifact Registry repository for you.
+# Grant the Storage Object Admin role for uploading files to GCS
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/storage.objectAdmin"
 
-   In Cloud Shell, execute the following commands:
+# Grant the Service Usage Consumer role to allow using the APIs
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/serviceusage.serviceUsageConsumer"
 
-   ```bash
-   export AR_REPO='<REPLACE_WITH_YOUR_ArifactRegistry_REPO_NAME>'  # Change this or perhaps use pinionai
-   export SERVICE_NAME='pinionai-streamlit-agent' # This is the name of our Application and Cloud Run service. Change it if you like.
+# Grant Cloud Run invoker role
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+    --member="serviceAccount:${SERVICE_ACCOUNT_EMAIL}" \
+    --role="roles/run.invoker"
+```
 
-   # make sure you are in the active directory
-   gcloud artifacts repositories create "$AR_REPO" --location="$GCP_REGION" --repository-format=Docker
-   gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev"
-   gcloud builds submit --tag "$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$AR_REPO/$SERVICE_NAME"
-   ```
+## Deployment Steps
 
-   You may also want to build and deploy manually, by performing the following:
+### 1. Set Up Your Environment
 
-   ```bash
-   docker build --platform linux/amd64 --tag $GCP_REGION-docker.pkg.dev/$GCP_PROJECT/pinionai/run:v1 .
+Define some environment variables to make the following commands easier to manage. Choose a region that supports Cloud Run.
 
-   docker push $GCP_REGION-docker.pkg.dev/$GCP_PROJECT/pinionai/run:v1
-   ```
+```bash
+export PROJECT_ID=$(gcloud config get-value project)
+export REGION="us-central1" # Or your preferred region
+export REPOSITORY="pinionai-chat-repo"
+export IMAGE_NAME="pinionai-chat"
+```
 
-3. The final step is to deploy the service in Cloud Run with the image that we had built and had pushed to the Artifact Registry in the previous step:
+### 2. Enable Required APIs (only need to do this once)
 
-   In Cloud Shell, execute the following command:
+You need to enable the Artifact Registry API (to store your Docker image) and the Cloud Run API (to run your service).
 
-   ```bash
-   gcloud run deploy "$SERVICE_NAME" \
-     --port=8080 \
-     --image="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT/$AR_REPO/$SERVICE_NAME" \
-     --allow-unauthenticated \
-     --region=$GCP_REGION \
-     --platform=managed  \
-     --project=$GCP_PROJECT \
-     --set-env-vars=client_id=$YOUR_CLIENT_ID_HERE,GCP_REGION=$YOUR_CLIENT_SECRET_HERE, etc...
-   ```
+```bash
+gcloud services enable artifactregistry.googleapis.com run.googleapis.com
+```
 
-You may also choose to deploy manually in Google Cloud Console.
+### 3. Create an Artifact Registry Repository (only need to do this once)
 
-On successful deployment, you will be provided a URL to the Cloud Run service. You can visit that in the browser to view the Cloud Run application that you just deployed.
+Create a Docker repository in Artifact Registry to host your container image.
 
-## Installing Development Pinionai
+```bash
+gcloud artifacts repositories create ${REPOSITORY} \
+    --repository-format=docker \
+    --location=${REGION} \
+    --description="Docker repository for the PINION AI Chat application"
+```
+
+### 4. Configure Docker Authentication
+
+Configure the Docker command-line tool to authenticate with Artifact Registry.
+
+```bash
+gcloud auth configure-docker ${REGION}-docker.pkg.dev
+```
+
+### 5. Build and Push the Docker Image
+
+Build the Docker image from the `Dockerfile` in the project root, tag it, and push it to your Artifact Registry repository.
+
+```bash
+# Define the full image URI
+export IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
+
+# As a deploy (single command to build and push)
+gcloud builds submit --tag ${IMAGE_URI}
+
+# --- OR ----
+# Build the Docker image from the project root
+docker build -t ${IMAGE_URI} .
+
+# Push the image to Artifact Registry
+docker push ${IMAGE_URI}
+
+
+```
+
+### 6. Deploy to Google Cloud Run with Environment Variables
+
+Deploy your container image to Cloud Run and pass the environment variables from your `.env` file. You can specify each variable using the `--set-env-vars` flag, Or use the `--env-vars-file` flag with a YAML file.
+
+Use the `--service-account` flag to specify the identity your service will run as.
+
+**Option 1: Using `--set-env-vars`**
+
+Extract the variables from your `.env` file and pass them as a comma-separated list:
+
+```bash
+gcloud run deploy ${IMAGE_NAME} \
+    --image=${IMAGE_URI} \
+    --port=8080 \
+    --service-account=${SERVICE_ACCOUNT_EMAIL} \
+    --project=${PROJECT_ID} \
+    --region=${REGION} \
+    --platform=managed \
+    --allow-unauthenticated \
+    --min-instances 0 \
+    --cpu-boost \
+    --set-env-vars client_id=YOUR_CLIENT_ID_HERE,client_secret=YOUR_CLIENT_SECRET_HERE,etc...
+```
+
+**Option 2: Using an Environment Variables YAML File**
+
+Convert your `.env` file to a YAML file (e.g., `env.yaml`):
+
+```yaml
+client_id: <YOUR_CLIENT_ID_HERE>
+client_secret: <YOUR_CLIENT_SECRET_HERE>
+agent_id: <YOUR_AGENT_ID_HERE>
+host_url: https://microservice-72loomfx5q-uc.a.run.app
+WEBSOCKET_URL: https://pinionai-grpc-server-72loomfx5q-uc.a.run.app
+```
+
+Then deploy with:
+
+```bash
+gcloud run deploy ${IMAGE_NAME} \
+    --image=${IMAGE_URI} \
+    --port=8080 \
+    --service-account=${SERVICE_ACCOUNT_EMAIL} \
+    --project=${PROJECT_ID} \
+    --region=${REGION} \
+    --platform=managed \
+    --allow-unauthenticated \
+    --min-instances 0 \
+    --cpu-boost \
+    --env-vars-file env.yaml
+```
+
+During the deployment process, `gcloud` will prompt you to confirm the settings. Once you confirm, it will deploy the service and provide you with a **Service URL**.
+
+### Important Note: Vertex AI Service Agent Permissions
+
+For PinionAI Studio RAG file import to succeed, the **Vertex AI Service Agent** (a Google-managed service account) must have permission to read files from your Google Cloud Storage bucket.
+
+This permission is usually granted automatically when you enable the Vertex AI API. However, if you encounter `Permission Denied` errors during ingestion, ensure the Vertex AI Service Agent has the `Storage Object Viewer` (`roles/storage.objectViewer`) role on your project.
+
+### 7. Access Your Application
+
+Once the deployment is complete, you can access your Streamlit application by navigating to the **Service URL** provided in the command-line output. If you want to use a domain name, you will need to create a CNAME with your domain provider that points to this Service URL. However at this time, Google does not recommend this for production services.
+
+- Cloud Run domain mappings are in the preview launch stage. Due to latency issues, they are not production-ready and are not supported at General Availability. At the moment, this option is not recommended for production services.
+
+### 8. Maintaining 'Always Ready' Service
+
+To keep a Cloud Run server running without it shutting down due to inactivity, you must set a minimum number of instances to maintain a warm, ready state even when there's no traffic, or use manual scaling to keep a specific number of instances running all the time. You should also ensure your application is configured for instance-based billing to support potential background activities and not rely on scaling to zero.
+
+1. **Configure minimum instances.**
+
+Change the gcloud run deploy ${IMAGE_NAME} command above, and include --cpu-boost \ flag when deploying
+
+_OR_
+
+```bash
+gcloud run services update SERVICE_NAME --min-instances=1
+
+```
+
+_OR_
+
+- Navigate to your Cloud Run service: in the Google Cloud console.
+- Edit the service.
+- Adjust the "Minimum number of instances" setting: to a value greater than zero. This tells Cloud Run to keep at least that many instances running, even when they are idle.
+- Save the changes: to deploy the updated configuration.
+
+2. **USE CPU boost**
+
+You can use CPU boost tag to double CPU effort for the first 10 seconds. This helps speed the application startup when running a cold start.
+
+Change the gcloud run deploy ${IMAGE_NAME} command above, and set the flag --min-instances 1 \ when deploying
+
+3. **Consider CPU always allocated** Additionally, this feature ensures that a container instance's CPU is fully available for background processing, not just during request handling. It is typically used in combination with minimum instances.
+
+- In Google Cloud Console: In the service editor, navigate to the Container, networking, security section. In the Container tab, select CPU is always allocated.
+- In gcloud CLI:
+
+```bash
+gcloud run services update SERVICE_NAME --cpu-throttling --cpu-throttling=never
+```
+
+# Installing Development Pinionai
 
 By default, the application will install `pinionai` from PyPI.
 If you want to install the latest development version from GitHub, comment out the `pinionai` line in `requirements.in` (or `requirements.txt`) and uncomment the GitHub line.

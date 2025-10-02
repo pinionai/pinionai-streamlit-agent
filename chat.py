@@ -143,7 +143,6 @@ if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be
             with st.spinner("Thinking..."):
                 full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(prompt, sender="user"))
                 st.markdown(full_ai_response_string)
-            # The client's process_user_input method already adds the assistant's response to its chat_messages
             run_coroutine_in_event_loop(client.update_pinion_session())
             # Handle if a next_intent was set by the AI's processing
             if client.next_intent:
@@ -154,7 +153,7 @@ if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be
                         st.markdown(full_ai_response_string)
                     run_coroutine_in_event_loop(client.update_pinion_session())       
         if client.transfer_requested and not client._grpc_stub: # If transfer was just requested
-            # Start gRPC client listener if transfer is now requested
+            # Start gRPC client listener if agent transfer is now requested
             if run_coroutine_in_event_loop(client.start_grpc_client_listener(sender_id="user")):
                 st.info("Transfer to live agent initiated... Waiting for agent to connect.")
                 # Poll for the first message from the agent

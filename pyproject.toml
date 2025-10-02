@@ -5,13 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "pinionai-chat"
 version = "0.1.0"
-description = "PinionAI Cloud Run application utilizing Streamlit Framework."
-readme = "README.md"
+description = "PinionAI Client application utilizing Streamlit Framework."
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
 authors = [
     { name="Alan Johnson", email="alan@pinionai.com" },
-    { name="PinionAI", email="info@pinionai.com" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -24,7 +21,7 @@ dependencies = [
     # Core Application & Framework
     "streamlit",
     "Pillow",
-    "pinionai[all]",  # PinionAI Client Core
+    "pinionai[all]",  # PinionAI Client Core + all optional dependencies (line 36-46)
 
     # Google Cloud & Vertex AI
     "google-cloud-logging",
@@ -46,5 +43,5 @@ all = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["app"]
+packages = ["pinionai-chat"]
 

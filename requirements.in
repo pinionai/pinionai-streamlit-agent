@@ -4,11 +4,10 @@
 #
 # This file tells uv to look at pyproject.toml and install the current
 # project in editable mode (-e .) along with all its "dev" extras.
+-e .[dev]
 
 # For PyPI install (default)
 # pinionai
 
 # For development GitHub install (uncomment if you want to install from GitHub instead)
 # git+https://github.com/pinionai/pinionai-package.git
-
--e .[dev]
