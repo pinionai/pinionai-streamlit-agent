@@ -56,6 +56,12 @@ def poll_for_updates(client: AsyncPinionAIClient, timeout: int, http_poll_start:
     return False # Timeout reached
 
 # --- Initialize PinionAIClient ---
+# Set the page configuration for the Streamlit app
+st.set_page_config(
+    page_title="PinionAI Chat",
+    page_icon="assets/favicon.ico",
+    layout="wide"
+)
 if "pinion_client" not in st.session_state:
     # Change to serve desired version (draft, development, test, live, archived), None loads in progress latest.
     st.session_state.version = None 
