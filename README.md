@@ -72,7 +72,6 @@ uv pip sync requirements.txt
    - client_secret = '<YOUR_CLIENT_SECRET_HERE>'
    - agent_id = '<YOUR_AGENT_ID_HERE>'
    - host_url = 'https://microservice-72loomfx5q-uc.a.run.app'
-   - WEBSOCKET_URL = 'https://pinionai-grpc-server-72loomfx5q-uc.a.run.app'
 
    `client_id` and `client_secret` are found within your PinionAI Studio application. You can generate a new client secret in the PinionAI Studio portal if desired. `agent_id `is the unique identifier of the AI agent you create in PinionAI Studio and want to serve. `host_url` is the location of PinionAI API server. `WEBSOCKET_URL` is to facilitate live agent chats, and will match the Pinion AI gRPC server address and port.
 
@@ -94,7 +93,7 @@ uv pip sync requirements.txt
 
 The application will startup and you will be provided a local URL to the application.
 
-# PRODUCTION Deploy AI Agent to Google Cloud Run
+# Productino Deploy AI Agent to Google Cloud Run
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
 
@@ -115,22 +114,26 @@ gcloud config set project YOUR_PROJECT_ID
 
 Replace `YOUR_PROJECT_ID` with your actual Google Cloud project ID.
 
-### Step 1: Create a Dedicated Service Account (only need to do this once)
+### Step 1: Export out a few core variables
+
+```bash
+# Set basic environment variables for your project and desired service account name
+export PROJECT_ID=$(gcloud config get-value project)
+export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
+```
+
+### Step 2: Create a Dedicated Service Account and Grant Necessary IAM Roles
+
+- NOTE: only do step 2 once
 
 First, create a new, dedicated service account for your Cloud Run service. This ensures the service has only the permissions it needs, following the principle of least privilege.
 
 ```bash
-# Set environment variables for your project and desired service account name
-export PROJECT_ID=$(gcloud config get-value project)
-export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
-
 # Create the service account
 gcloud iam service-accounts create "${SERVICE_ACCOUNT_NAME}" \
     --display-name="Cloud Run PinionAI Client Service Account" \
     --project="${PROJECT_ID}"
 ```
-
-### Step 2: Grant Necessary IAM Roles (only need to do this once)
 
 Next, grant the required IAM roles to the new service account. These permissions allow the service to interact with Vertex AI, Cloud Storage, and use the enabled APIs.
 
@@ -244,6 +247,15 @@ gcloud run deploy ${IMAGE_NAME} \
     --set-env-vars client_id=YOUR_CLIENT_ID_HERE,client_secret=YOUR_CLIENT_SECRET_HERE,etc...
 ```
 
+- environment variables needed are:
+
+```env
+client_id = '<YOUR_CLIENT_ID_HERE>'
+client_secret = '<YOUR_CLIENT_SECRET_HERE>'
+agent_id = '<YOUR_AGENT_ID_HERE>'
+host_url = 'https://microservice-72loomfx5q-uc.a.run.app' # '<PINIONAI_API_HOST_URL_HERE>'
+```
+
 **Option 2: Using an Environment Variables YAML File**
 
 Convert your `.env` file to a YAML file (e.g., `env.yaml`):
@@ -253,7 +265,6 @@ client_id: <YOUR_CLIENT_ID_HERE>
 client_secret: <YOUR_CLIENT_SECRET_HERE>
 agent_id: <YOUR_AGENT_ID_HERE>
 host_url: https://microservice-72loomfx5q-uc.a.run.app
-WEBSOCKET_URL: https://pinionai-grpc-server-72loomfx5q-uc.a.run.app
 ```
 
 Then deploy with:
