@@ -285,12 +285,6 @@ gcloud run deploy ${IMAGE_NAME} \
 
 During the deployment process, `gcloud` will prompt you to confirm the settings. Once you confirm, it will deploy the service and provide you with a **Service URL**.
 
-### Important Note: Vertex AI Service Agent Permissions
-
-For PinionAI Studio RAG file import to succeed, the **Vertex AI Service Agent** (a Google-managed service account) must have permission to read files from your Google Cloud Storage bucket.
-
-This permission is usually granted automatically when you enable the Vertex AI API. However, if you encounter `Permission Denied` errors during ingestion, ensure the Vertex AI Service Agent has the `Storage Object Viewer` (`roles/storage.objectViewer`) role on your project.
-
 ### 7. Access Your Application
 
 Once the deployment is complete, you can access your Streamlit application by navigating to the **Service URL** provided in the command-line output. If you want to use a domain name, you will need to create a CNAME with your domain provider that points to this Service URL. However at this time, Google does not recommend this for production services.
