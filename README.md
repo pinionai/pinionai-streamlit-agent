@@ -2,13 +2,13 @@
 
 This application uses the [Streamlit](https://streamlit.io/) framework, Pinionai python library to serve Agents you author in PinionAI studio.
 
-## LOCALLY Running your AI Agent
+## Locally Running your AI Agent
 
 To run the Streamlit Application locally (on cloud shell), we need to perform the following steps:
 
 1. Decisions, decisions... By default, the application will install `pinionai` from PyPI. First thing to know is that pinionai will include a number of dependencies, but also can also install optional dependencies. Depending on what you plan to use in your agents, you should consider which optional libraries you might want to install.
 
-Edit the `pyproject.toml`, before generating the requirements.txt and pip install. By default, `pinionai[all]` is installed, but there are additional options or changes you can make.
+If desired, edit the `pyproject.toml`, before generating the requirements.txt and pip install. By default, `pinionai[all]` is installed, but there are additional options or changes you can make.
 
 ## Optional Features
 
@@ -73,9 +73,9 @@ uv pip sync requirements.txt
    - agent_id = '<YOUR_AGENT_ID_HERE>'
    - host_url = 'https://microservice-72loomfx5q-uc.a.run.app'
 
-   `client_id` and `client_secret` are found within your PinionAI Studio application. You can generate a new client secret in the PinionAI Studio portal if desired. `agent_id `is the unique identifier of the AI agent you create in PinionAI Studio and want to serve. `host_url` is the location of PinionAI API server. `WEBSOCKET_URL` is to facilitate live agent chats, and will match the Pinion AI gRPC server address and port.
+   `client_id` and `client_secret` are found within your PinionAI Studio application. You can generate a new client secret in the PinionAI Studio portal if desired. `agent_id `is the unique identifier of the AI agent you create in PinionAI Studio and want to serve. `host_url` is the location of PinionAI API server.
 
-   **NOTE**: AI Agent LLM keys, GCP_PROJECT and many other variables are set within PinionAI Studio itself. You will need to configure these to run your agent.
+   **NOTE**: AI Agent LLM keys, GCP_PROJECT, WEBSOCKET_URL and many other variables are set within PinionAI Studio itself. You will need to configure these to run your agent.
 
    **NOTE:** Do not commit your `.env` file to version control if it contains sensitive information. Add `.env` to your `.gitignore`.
 
@@ -93,7 +93,7 @@ uv pip sync requirements.txt
 
 The application will startup and you will be provided a local URL to the application.
 
-# Productino Deploy AI Agent to Google Cloud Run
+# Production Deploy AI Agent to Google Cloud Run
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
 
