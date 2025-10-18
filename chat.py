@@ -55,27 +55,43 @@ def poll_for_updates(client: AsyncPinionAIClient, timeout: int, http_poll_start:
         time.sleep(0.1) # Prevent busy-waiting
     return False # Timeout reached
 
+def ensure_grpc_is_active(client: AsyncPinionAIClient):
+    """
+    For Live Agent Discussion. Checks if the gRPC client is active 
+    and starts it if not. Makes the app fork-safe.
+    """
+    if not client._grpc_stub:
+        try:
+            # print("gRPC client not active. Initializing now...")
+            is_started = run_coroutine_in_event_loop(client.start_grpc_client_listener(sender_id="user"))
+            if is_started:
+                st.info("Connecting to live agent...")
+                return True
+            else:
+                st.error("Could not connect to live agent service.")
+                return False
+        except Exception as e:
+            st.error(f"Failed to start gRPC listener: {e}")
+            return False
+    return True # Already active
+
 # --- Initialize PinionAIClient ---
-# Set the page configuration for the Streamlit app
 st.set_page_config(
     page_title="PinionAI Chat",
     page_icon="assets/favicon.ico",
     layout="wide"
 )
 if "pinion_client" not in st.session_state:
-    # Change to serve desired version (draft, development, test, live, archived), None loads in progress latest.
+    # Change below to serve specific version (draft, development, test, live, archived), None loads latest in progress.
     st.session_state.version = None 
     try:
         st.session_state.pinion_client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
-            agent_id=os.environ.get("agent_id_stocks"),
+            agent_id=os.environ.get("agent_id"),
             host_url=os.environ.get("host_url"),
             client_id=os.environ.get("client_id"),
             client_secret=os.environ.get("client_secret"),
             version=st.session_state.version
         ))
-
-        # Initialize the gRPC client once the main client is created.
-        run_coroutine_in_event_loop(st.session_state.pinion_client.start_grpc_client_listener(sender_id="user"))
         
         if not st.session_state.pinion_client.chat_messages and st.session_state.pinion_client.var.get("agentStart"):
             st.session_state.pinion_client.add_message_to_history(
@@ -109,23 +125,22 @@ with col1:
 with col2:
     st.image(assistant_img)
 st.write(var["agentSubtitle"])
-with st.form(f"chat_status_form_{client.session_id or 'nosession'}"):
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.form_submit_button("Continue"):
-            st.rerun()
-    with col2:
-        if st.form_submit_button("End Chat"):
-            st.session_state.end_chat_clicked = "yes"
-            run_coroutine_in_event_loop(client.end_grpc_chat_session()) 
-            st.rerun()
+
+if var["transferAllowed"]:
+    with st.form(f"chat_status_form_{client.session_id or 'nosession'}"):
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.form_submit_button("Continue"):
+                st.rerun()
+        with col2:
+            if st.form_submit_button("End Chat"):
+                st.session_state.end_chat_clicked = "yes"
+                run_coroutine_in_event_loop(client.end_grpc_chat_session()) 
+                st.rerun()
             
 # Start gRPC client listener if transfer is requested and not already started
-if client.transfer_requested and not client._grpc_stub:
-    if run_coroutine_in_event_loop(client.start_grpc_client_listener(sender_id="user")): 
-        st.info("Connecting to live agent...")
-    else:
-        st.error("Could not connect to live agent service.")
+if client.transfer_requested:
+    ensure_grpc_is_active(client)
 
 display_chat_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
 
@@ -136,14 +151,14 @@ if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be
         st.markdown(prompt)
 
     if client.transfer_requested:  # LIVE AGENT MODE
-        run_coroutine_in_event_loop(client.update_pinion_session())
-        run_coroutine_in_event_loop(client.send_grpc_message(prompt))
-        
-        # Poll for a response from the agent before rerunning
-        if poll_for_updates(client, timeout=180):
-            st.rerun()
-        else:
-            st.warning("No new messages in the last 3 minutes. Please click Continue or End Chat.")
+        if ensure_grpc_is_active(client):
+            run_coroutine_in_event_loop(client.update_pinion_session())
+            run_coroutine_in_event_loop(client.send_grpc_message(prompt))
+            # Poll for a response from the agent before rerunning
+            if poll_for_updates(client, timeout=180):
+                st.rerun()
+            else:
+                st.warning("No new messages in the last 3 minutes. Please click Continue or End Chat.")
     else: # AI AGENT MODE
         with st.chat_message("assistant", avatar=assistant_img):
             with st.spinner("Thinking..."):
@@ -158,9 +173,9 @@ if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be
                         full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(prompt, sender="user"))
                         st.markdown(full_ai_response_string)
                     run_coroutine_in_event_loop(client.update_pinion_session())       
-        if client.transfer_requested and not client._grpc_stub: # If transfer was just requested
-            # Start gRPC client listener if agent transfer is now requested
-            if run_coroutine_in_event_loop(client.start_grpc_client_listener(sender_id="user")):
+        if client.transfer_requested:
+            # Start gRPC client listener if agent transfer is requested
+            if ensure_grpc_is_active(client):
                 st.info("Transfer to live agent initiated... Waiting for agent to connect.")
                 # Poll for the first message from the agent
                 if poll_for_updates(client, timeout=180):
@@ -170,7 +185,6 @@ if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be
             else:
                 st.error("Could not connect to live agent service for transfer.")
         elif client.transfer_requested: # If transfer was already active, and AI responded (e.g. fallback)
-            # Poll for a response from the agent before rerunning
             if poll_for_updates(client, timeout=180):
                 st.rerun()
             else:

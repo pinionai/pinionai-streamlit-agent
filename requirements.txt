@@ -33,7 +33,7 @@ attrs==25.3.0
     #   cyclopts
     #   jsonschema
     #   referencing
-authlib==1.6.1
+authlib==1.6.4
     # via fastmcp
 blinker==1.9.0
     # via streamlit
@@ -268,7 +268,7 @@ pillow==11.3.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.1.4
+pinionai==0.1.5
     # via pinionai-chat
 ply==3.11
     # via jsonpath-ng
@@ -392,7 +392,7 @@ sse-starlette==3.0.2
     # via mcp
 starlette==0.47.2
     # via mcp
-streamlit==1.49.1
+streamlit==1.50.0
     # via pinionai-chat
 tenacity==9.1.2
     # via

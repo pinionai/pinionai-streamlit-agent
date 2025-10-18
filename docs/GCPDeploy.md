@@ -79,7 +79,7 @@ Define some environment variables to make the following commands easier to manag
 
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
-export REGION="us-central1" # Or your preferred region
+export REGION="us-central1"
 export REPOSITORY="pinionai-chat-repo"
 export IMAGE_NAME="pinionai-chat"
 ```
