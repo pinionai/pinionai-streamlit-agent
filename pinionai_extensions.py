@@ -63,7 +63,7 @@ async def generate_password(length: int = 12) -> str:
             password_chars.append(random.choice(combined_list))
         
         random.shuffle(password_chars)
-        return f"Your new password is: {''.join(password_chars)}"
+        return f"{''.join(password_chars)}"
     
 # Makes stock output pretty
 async def format_stock_data_as_markdown(stock_data: dict) -> str:

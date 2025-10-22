@@ -268,7 +268,7 @@ pillow==11.3.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.1.5
+pinionai==0.1.6
     # via pinionai-chat
 ply==3.11
     # via jsonpath-ng
