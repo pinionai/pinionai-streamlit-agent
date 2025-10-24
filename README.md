@@ -93,6 +93,47 @@ uv pip sync requirements.txt
 
 The application will startup and you will be provided a local URL to the application.
 
+## Running the terminal (CLI) chat client: `chat_cli.py`
+
+A lightweight terminal-based client is included for environments where Streamlit isn't available or when you prefer a CLI workflow. The CLI mirrors the same agent logic used by the Streamlit app but interacts via stdin/stdout.
+
+Prerequisites are the same as for the Streamlit app: a Python environment with the dependencies installed and required environment variables set (or a `.env` file present).
+
+Create / activate your virtualenv (example using `uv`):
+
+```bash
+uv venv pinionai-streamlit
+source pinionai-streamlit/bin/activate
+uv pip sync requirements.txt
+```
+
+Set the same environment variables you use for the Streamlit app (or copy `.env.example` to `.env` and edit):
+
+```env
+client_id=<YOUR_CLIENT_ID_HERE>
+client_secret=<YOUR_CLIENT_SECRET_HERE>
+agent_id=<YOUR_AGENT_ID_HERE>
+host_url=https://microservice-72loomfx5q-uc.a.run.app
+```
+
+Run the CLI client:
+
+```bash
+python chat_cli.py
+```
+
+Basic interactive commands inside the CLI:
+
+- Type your message and press Enter to send it to the agent.
+- /end — end the chat session and exit the client.
+- /continue — force a short poll for updates and display any new messages.
+
+Notes:
+
+- The CLI prints simple text output (no avatars or rich markdown rendering).
+- Live-agent transfers (gRPC) are supported if the agent requests a transfer; the CLI will attempt to start the gRPC listener and poll for agent responses.
+- If you rely on Streamlit-specific session-state features, the CLI may behave slightly differently; the core message flow and client API usage remain the same.
+
 # Production Deploy AI Agent to Google Cloud Run
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
