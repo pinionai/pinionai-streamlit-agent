@@ -4,7 +4,7 @@ title: Agent Production Deployment - Cloud Run
 
 # Deploy AI Agent to Google Cloud Run
 
-This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
+This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file, or `env.yaml`.
 
 ## Prerequisites
 
@@ -79,7 +79,7 @@ Define some environment variables to make the following commands easier to manag
 
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
-export REGION="us-central1"
+export REGION="us-central1" # Or your preferred region
 export REPOSITORY="pinionai-chat-repo"
 export IMAGE_NAME="pinionai-chat"
 ```

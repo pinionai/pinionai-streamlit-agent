@@ -79,6 +79,11 @@ def ensure_grpc_is_active(client: AsyncPinionAIClient):
 st.set_page_config(
     page_title="PinionAI Chat",
     page_icon="assets/favicon.ico",
+    menu_items={
+        'Get help': 'https://docs.pinionai.com/',
+        'Report a bug': 'https://www.pinionai.com/contact',
+        'About': 'Try **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.1.8`'
+    },
     layout="wide"
 )
 if "pinion_client" not in st.session_state:

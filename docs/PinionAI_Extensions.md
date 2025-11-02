@@ -120,8 +120,10 @@ The `check share price` intent should include a completed `Required Variable Inp
 
 ```json
 {
-  "stock_symbol": "What is the stock ticker to you want to check",
-  "stock_lookup_function": "What do you want to check.  You can say GLOBAL_QUOTE for current price information, TIME_SERIES_INTRADAY for today's price action, or TIME_SERIES_DAILY for recent price moves."
+  "0": { "stock_symbol": "What is the stock ticker to you want to check" },
+  "1": {
+    "stock_lookup_function": "What do you want to check.  You can say GLOBAL_QUOTE for current price information, TIME_SERIES_INTRADAY for today's price action, or TIME_SERIES_DAILY for recent price moves."
+  }
 }
 ```
 

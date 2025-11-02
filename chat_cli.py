@@ -1,4 +1,4 @@
-"""Terminal-based chat client mirroring chat.py Streamlit behavior.
+"""Terminal-based chat client for PinionAI using AsyncPinionAIClient.
 
 Usage:
     python chat_cli.py
@@ -7,8 +7,7 @@ Controls:
     /end    - end chat session and exit
     /continue - continue polling or force refresh
 
-This client uses AsyncPinionAIClient similarly to the Streamlit app but
-interacts via stdin/stdout instead of Streamlit widgets.
+This client uses AsyncPinionAIClient and interacts via stdin/stdout.
 """
 import os
 import time
@@ -19,7 +18,7 @@ from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
 from dotenv import load_dotenv
 load_dotenv()
 
-# Persistent event loop management (similar to streamlit version)
+# Persistent event loop management 
 _event_loop = None
 _event_loop_lock = threading.Lock()
 

@@ -1,6 +1,6 @@
-## PinionAI Agent Deployment - Examples utilizing Streamlit Framework and CLI
+## PinionAI Agent Deployment - Examples with Streamlit or CLI
 
-This project builds Agentic AI application using the [Streamlit](https://streamlit.io/) framework or a terminal CLI, Pinionai python library to serve Agents you author in PinionAI studio.
+This project builds Agentic AI application using the [Streamlit](https://streamlit.io/) framework or a terminal CLI, and the [PinionAI python library](https://pypi.org/project/pinionai/) to serve Agents you author in PinionAI studio.
 
 Instructions are included for running the application locally, deploying this application to Cloud Run or Streamlit Community Cloud.
 
@@ -136,7 +136,7 @@ Notes:
 - Live-agent transfers (gRPC) are supported if the agent requests a transfer; the CLI will attempt to start the gRPC listener and poll for agent responses.
 - If you rely on Streamlit-specific session-state features, the CLI may behave slightly differently; the core message flow and client API usage remain the same.
 
-# Production Deploy AI Agent to `Streamlit Community Cloud`
+## Production Deploy AI Agent to `Streamlit Community Cloud`
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Streamlit Community Cloud, including configuration of required environment variables using a `.env` file, or `env.yaml`.
 
@@ -205,7 +205,7 @@ host_url = "https://microservice-72loomfx5q-uc.a.run.app"
     10. A JSON key file will be downloaded to your computer. This file contains the credentials needed to authenticate as the service account.
     11. Use the contents of this file in the `Client Secret` field of your connector in Pinion AI and save, and select the connector in your desired Agent
 
-# Production Deploy AI Agent to `Google Cloud Run`
+## Production Deploy AI Agent to `Google Cloud Run`
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
 
