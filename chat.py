@@ -173,14 +173,13 @@ if not os.environ.get("agent_id"):
                 st.stop()
 else:                    
     if "pinion_client" not in st.session_state:
-            st.session_state.version = None  # Change to serve specific version (draft, development, test, live, archived). None loads latest in progress.
             try:
                 st.session_state.pinion_client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
                     agent_id=os.environ.get("agent_id"),
                     host_url=os.environ.get("host_url"),
                     client_id=os.environ.get("client_id"),
                     client_secret=os.environ.get("client_secret"),
-                    version=st.session_state.version
+                    version=os.environ.get("version", None) # Change to serve specific version (draft, development, test, live, archived). None loads latest in progress.
                 ))
                 if not st.session_state.pinion_client.chat_messages and st.session_state.pinion_client.var.get("agentStart"):
                     st.session_state.pinion_client.add_message_to_history(

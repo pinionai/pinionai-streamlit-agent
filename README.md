@@ -124,6 +124,42 @@ Run the CLI client:
 python chat_cli.py
 ```
 
+#### Loading an Agent from an AIA File
+
+The CLI supports loading agents from `.aia` (AI Agent) files. This is useful when you don't have environment variables configured or want to run a specific agent file directly.
+
+**Option 1: Pass the AIA file via command-line flag**
+
+```bash
+python chat_cli.py -f path/to/agent.aia
+```
+
+Or use the long form:
+
+```bash
+python chat_cli.py --aia-file path/to/agent.aia
+```
+
+**Option 2: Interactive AIA file loading**
+
+If environment variables (`client_id`, `client_secret`, `agent_id`) are not set or the client initialization fails, the CLI will prompt you to provide the path to an `.aia` file:
+
+```
+Failed to initialize PinionAI client from environment: ...
+Enter path to .aia file to load the agent (or leave empty to abort):
+```
+
+**Encrypted AIA Files (Key Secret)**
+
+If your `.aia` file is encrypted and requires a `key_secret`:
+
+1. The CLI will detect this and prompt: `This AIA file requires a key_secret to decrypt.`
+2. Enter your key_secret securely (input is hidden):
+   ```
+   Enter key_secret:
+   ```
+3. The CLI will attempt to decrypt and load the agent. You have up to 3 attempts.
+
 Basic interactive commands inside the CLI:
 
 - Type your message and press Enter to send it to the agent.
@@ -135,6 +171,7 @@ Notes:
 - The CLI prints simple text output (no avatars or rich markdown rendering).
 - Live-agent transfers (gRPC) are supported if the agent requests a transfer; the CLI will attempt to start the gRPC listener and poll for agent responses.
 - If you rely on Streamlit-specific session-state features, the CLI may behave slightly differently; the core message flow and client API usage remain the same.
+- The same flexibility as the Streamlit app applies: use environment variables for default agent configuration, or supply an `.aia` file to run any agent on demand.
 
 ## Production Deploy AI Agent to `Streamlit Community Cloud`
 
@@ -173,6 +210,15 @@ host_url = "https://microservice-72loomfx5q-uc.a.run.app"
 '''
 ```
 
+**OR**
+
+- For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need client_id, client_secret or a specific agent_id.
+
+```bash
+host_url = "https://microservice-72loomfx5q-uc.a.run.app"
+'''
+```
+
 5. Deploy the app.
 
 - **Advantages**: Free, easy to set up, good for sharing and testing.
@@ -182,7 +228,7 @@ host_url = "https://microservice-72loomfx5q-uc.a.run.app"
 
 #### Gemini/Vertex AI Connectors (for non-GCP hosted agents)
 
-    To allow PinionAI agents to use Gemini/Vertex AI when not hosted in GCP, you must add a service account with the appropriate permissions to the Agent configuration in Pinion AI (Connectors Tab). A service account is a special type of Google account intended to represent a non-human user (like an application) that needs to authenticate and be authorized to access data in Google APIs. Configure connectors with the following special grant types:
+    **Note:** To allow PinionAI agents to use Gemini/Vertex AI when not hosted in GCP, you must add a service account with the appropriate permissions to the Agent configuration in PinionAI Studio (in Connectors Tab). A service account is a special type of Google account intended to represent a non-human user (like an application) that needs to authenticate and be authorized to access data in Google APIs. Configure connectors with the following special grant types:
 
         **For Google Gemini/Vertex AI Access (non-GCP hosted):**
         *   `connector_grant_type`: Set this to `gcs_service_account`.
@@ -203,7 +249,7 @@ host_url = "https://microservice-72loomfx5q-uc.a.run.app"
     8. Find your service account in the list and click on it.
     9. Go to the "Keys" tab and click "Add Key" > "JSON".
     10. A JSON key file will be downloaded to your computer. This file contains the credentials needed to authenticate as the service account.
-    11. Use the contents of this file in the `Client Secret` field of your connector in Pinion AI and save, and select the connector in your desired Agent
+    11. Use the contents of this file in the `Client Secret` field of your connector in Pinion AI Studio configuration. Save and select the connector in your desired Agent.
 
 ## Production Deploy AI Agent to `Google Cloud Run`
 
@@ -366,17 +412,27 @@ client_id = '<YOUR_CLIENT_ID_HERE>'
 client_secret = '<YOUR_CLIENT_SECRET_HERE>'
 agent_id = '<YOUR_AGENT_ID_HERE>'
 host_url = 'https://microservice-72loomfx5q-uc.a.run.app' # '<PINIONAI_API_HOST_URL_HERE>'
+version = ''
+```
+
+**OR**
+
+- For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need client_id, client_secret or a specific agent_id.
+
+```env
+host_url = 'https://microservice-72loomfx5q-uc.a.run.app'
 ```
 
 **Option 2: Using an Environment Variables YAML File**
 
-Convert your `.env` file to a YAML file (e.g., `env.yaml`):
+Convert your `.env` file to a YAML file (e.g., `env.yaml`) and save:
 
 ```yaml
 client_id: <YOUR_CLIENT_ID_HERE>
 client_secret: <YOUR_CLIENT_SECRET_HERE>
 agent_id: <YOUR_AGENT_ID_HERE>
 host_url: https://microservice-72loomfx5q-uc.a.run.app
+version: "" # specific version include: draft, development, test, live, archived
 ```
 
 Then deploy with:
@@ -392,7 +448,15 @@ gcloud run deploy ${IMAGE_NAME} \
     --allow-unauthenticated \
     --min-instances 0 \
     --cpu-boost \
-    --env-vars-file env.yaml
+    --env-vars-file deploy/prod-agent/env.yaml
+```
+
+**OR**
+
+- For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need client_id, client_secret or a specific agent_id. Use a different env.yaml file, for example the one found here.
+
+```bash
+--env-vars-file deploy/prod-aia-file/env.yaml
 ```
 
 During the deployment process, `gcloud` will prompt you to confirm the settings. Once you confirm, it will deploy the service and provide you with a **Service URL**.

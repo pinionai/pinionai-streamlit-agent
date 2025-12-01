@@ -9,10 +9,12 @@ Controls:
 
 This client uses AsyncPinionAIClient and interacts via stdin/stdout.
 """
+import argparse
 import os
 import time
 import asyncio
 import threading
+import getpass
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
 from dotenv import load_dotenv
@@ -79,19 +81,110 @@ def display_messages(messages, user_img=None, assistant_img=None):
         prefix = "User: " if role == "user" else "Agent: "
         print(f"{prefix}{content}")
 
-def main():
-    # Initialize client
+def cleanup_client(client: AsyncPinionAIClient):
+    """Clean up client resources, particularly the HTTP session."""
     try:
-        client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
-            agent_id=os.environ.get("agent_id"),
-            host_url=os.environ.get("host_url"),
-            client_id=os.environ.get("client_id"),
-            client_secret=os.environ.get("client_secret"),
-            version=None
-        ))
-    except PinionAIConfigurationError as e:
-        print(f"Failed to initialize PinionAI client: {e}")
-        return
+        if hasattr(client, '_http_session') and client._http_session:
+            run_coroutine_in_event_loop(client._http_session.aclose())
+    except Exception as e:
+        print(f"Warning: Error closing HTTP session: {e}")
+
+def main():
+    parser = argparse.ArgumentParser(description="CLI for interacting with an agent.")
+    
+    # Add the new argument for the .aia file
+    parser.add_argument(
+        "-f", "--aia-file",
+        type=str,
+        help="Path to the .aia agent file to run. If provided, environment variables for client/agent IDs are ignored."
+    )
+    # You might have other arguments, keep them here
+    # parser.add_argument(...) 
+    args = parser.parse_args()
+
+    def load_agent_from_aia_path(path: str):
+        """Load an agent from a .aia file path. Returns client or None."""
+        if not os.path.exists(path):
+            print(f"Error: File not found at '{path}'")
+            return None
+        try:
+            with open(path, "rb") as f:
+                raw = f.read()
+            file_text = raw.decode("utf-8")
+            client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                file_stream=file_text,
+                host_url=os.environ.get("host_url")
+            ))
+            if client:
+                return client
+            if init_message == 'key_secret required for private version':
+                print("This AIA file requires a key_secret to decrypt.")
+                for attempt in range(3):
+                    key_secret = getpass.getpass("Enter key_secret: ")
+                    if not key_secret:
+                        print("No key_secret entered; try again.")
+                        continue
+                    try:
+                        client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                            file_stream=file_text,
+                            host_url=os.environ.get("host_url"),
+                            key_secret=key_secret
+                        ))
+                        if client:
+                            return client
+                        else:
+                            print(f"Failed to load agent: {init_message}")
+                    except PinionAIError as e:
+                        print(f"Failed to decrypt AIA file with provided key_secret: {e}")
+                print("Exceeded key_secret attempts. Aborting.")
+                return None
+            else:
+                print(f"Could not create agent from file: {init_message}")
+                return None
+        except PinionAIError as e:
+            print(f"Failed to initialize PinionAI client from AIA file: {e}")
+            return None
+        except Exception as e:
+            print(f"Unexpected error while reading AIA file: {e}")
+            return None
+
+    client = None
+    # Try AIA file from CLI flag first
+    if args.aia_file:
+        print(f"Loading agent from file: {args.aia_file}")
+        client = load_agent_from_aia_path(args.aia_file)
+
+    # If no AIA file or it failed, try env-based creation (only if all required env vars are present)
+    if client is None:
+        agent_id = os.environ.get("agent_id")
+        host_url = os.environ.get("host_url")
+        client_id = os.environ.get("client_id")
+        client_secret = os.environ.get("client_secret")
+        
+        # Check if all required environment variables are set
+        if agent_id and host_url and client_id and client_secret:
+            try:
+                client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
+                    agent_id=agent_id,
+                    host_url=host_url,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                    version=os.environ.get("version", None),
+                ))
+            except (PinionAIConfigurationError, Exception) as e:
+                print(f"Failed to initialize PinionAI client from environment: {e}")
+                client = None
+        
+        # If env-based creation failed or env vars are missing, prompt for AIA file
+        if client is None:
+            if not (agent_id and host_url and client_id and client_secret):
+                print("Environment variables (client_id, client_secret, agent_id, host_url) not found.")
+            aia_path = input("Enter path to .aia file to load the agent (or leave empty to abort): ").strip()
+            if aia_path:
+                client = load_agent_from_aia_path(aia_path)
+            else:
+                print("No .aia file provided. Exiting.")
+                return
 
     var = client.var
     print(var.get("agentTitle"),"PinionAI Terminal Chat")
@@ -111,6 +204,7 @@ def main():
             prompt = input("You: ")
         except EOFError:
             print("EOF received, exiting.")
+            cleanup_client(client)
             break
 
         if not prompt:
@@ -118,6 +212,7 @@ def main():
         if prompt.strip().lower() == "/end":
             run_coroutine_in_event_loop(client.end_grpc_chat_session())
             print("Chat ended.")
+            cleanup_client(client)
             break
         if prompt.strip().lower() == "/continue":
             print("Continuing / refreshing...")
