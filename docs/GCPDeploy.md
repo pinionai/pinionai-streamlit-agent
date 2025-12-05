@@ -188,7 +188,15 @@ gcloud run deploy ${IMAGE_NAME} \
     --allow-unauthenticated \
     --min-instances 0 \
     --cpu-boost \
-    --env-vars-file env.yaml
+    --env-vars-file deploy/prod-agent/env.yaml
+```
+
+**OR**
+
+- For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need client_id, client_secret or a specific agent_id. Use a different env.yaml file, for example the one found here.
+
+```bash
+--env-vars-file deploy/prod-aia-file/env.yaml
 ```
 
 During the deployment process, `gcloud` will prompt you to confirm the settings. Once you confirm, it will deploy the service and provide you with a **Service URL**.
