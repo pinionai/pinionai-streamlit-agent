@@ -50,11 +50,11 @@ def poll_for_updates(client: AsyncPinionAIClient, timeout: int, http_poll_start:
                 next_http_poll_time = now + http_poll_interval
             except Exception as e:
                 # Using print instead of st.warning to avoid cluttering the UI
-                print(f"Warning: Could not check for session updates: {e}")
+                st.warning(f"Warning: Could not check for session updates: {e}")
                 # Don't hammer on failure, schedule next poll
                 next_http_poll_time = now + http_poll_interval
         time.sleep(0.1) # Prevent busy-waiting
-    return False # Timeout reached
+    return False # Timeout
 
 def ensure_grpc_is_active(client: AsyncPinionAIClient):
     """
@@ -63,7 +63,6 @@ def ensure_grpc_is_active(client: AsyncPinionAIClient):
     """
     if not client._grpc_stub:
         try:
-            # print("gRPC client not active. Initializing now...")
             is_started = run_coroutine_in_event_loop(client.start_grpc_client_listener(sender_id="user"))
             if is_started:
                 st.info("Connecting to live agent...")
@@ -83,7 +82,7 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.2.0`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.2.2`'
     },
     layout="wide"
 )
@@ -126,8 +125,10 @@ if not os.environ.get("agent_id"):
                                     st.rerun()
                                 else:
                                     st.error(f"Failed to load agent: {init_message}")
+                                    st.stop()
                             except Exception as e:
                                 st.error(f"Failed to load agent with provided key: {e}")
+                                st.stop()
             with col2:
                 if st.form_submit_button("Cancel", use_container_width=True):
                     # Clean up temp state and go back

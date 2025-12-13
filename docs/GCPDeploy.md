@@ -82,6 +82,8 @@ export PROJECT_ID=$(gcloud config get-value project)
 export REGION="us-central1" # Or your preferred region
 export REPOSITORY="pinionai-chat-repo"
 export IMAGE_NAME="pinionai-chat"
+export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
+export SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
 ### 2. Enable Required APIs (only need to do this once)
@@ -92,7 +94,7 @@ You need to enable the Artifact Registry API (to store your Docker image) and th
 gcloud services enable artifactregistry.googleapis.com run.googleapis.com
 ```
 
-### 3. Create an Artifact Registry Repository
+### 3. Create an Artifact Registry Repository (only need to do this once)
 
 Create a Docker repository in Artifact Registry to host your container image.
 
@@ -122,7 +124,7 @@ export IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${IMAGE_N
 # As a deploy (single command to build and push)
 gcloud builds submit --tag ${IMAGE_URI}
 
-# --- OR ----
+# --- OR IF you want to do these 2 steps separately ----
 # Build the Docker image from the project root
 docker build -t ${IMAGE_URI} .
 
@@ -155,12 +157,20 @@ gcloud run deploy ${IMAGE_NAME} \
     --set-env-vars client_id=YOUR_CLIENT_ID_HERE,client_secret=YOUR_CLIENT_SECRET_HERE,etc...
 ```
 
-- environment variables needed are:
+- In --set-env-vars, to run a specific agent, environment variables needed are:
 
 ```env
 client_id = '<YOUR_CLIENT_ID_HERE>'
 client_secret = '<YOUR_CLIENT_SECRET_HERE>'
 agent_id = '<YOUR_AGENT_ID_HERE>'
+host_url = 'https://microservice-72loomfx5q-uc.a.run.app' # '<PINIONAI_API_HOST_URL_HERE>'
+```
+
+**OR**
+
+- For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need client_id, client_secret or a specific agent_id.
+
+```env
 host_url = 'https://microservice-72loomfx5q-uc.a.run.app' # '<PINIONAI_API_HOST_URL_HERE>'
 ```
 
