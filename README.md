@@ -514,6 +514,7 @@ If you want to install the latest development version from GitHub, comment out t
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
 export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
+export SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 export REGION="us-central1" # Or your preferred region
 export REPOSITORY="pinionai-chat-files"
 export IMAGE_NAME="pinionai-chat-files"
