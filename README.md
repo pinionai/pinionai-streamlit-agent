@@ -1,10 +1,10 @@
-## PinionAI Agent Deployment - Examples with Streamlit or CLI
+# PinionAI Agent Runners - GCP, Streamlit Cloud or CLI Examples
 
 This project builds Agentic AI application using the [Streamlit](https://streamlit.io/) framework or a terminal CLI, and the [PinionAI python library](https://pypi.org/project/pinionai/) to serve Agents you author in PinionAI studio.
 
 Instructions are included for running the application locally, deploying this application to Cloud Run or Streamlit Community Cloud.
 
-## Locally Running your AI Agent
+## Local Deployment - Locally Running your AI Agent
 
 To run the Streamlit Application locally (on cloud shell), we need to perform the following steps:
 
@@ -12,7 +12,7 @@ To run the Streamlit Application locally (on cloud shell), we need to perform th
 
 If desired, edit the `pyproject.toml`, before generating the requirements.txt and pip install. By default, `pinionai[all]` is installed, but there are additional options or changes you can make.
 
-## Optional Features
+### Optional Features
 
 The client includes optional features that require extra dependencies. You can install them as needed based on the services you intend to use.
 
@@ -95,7 +95,7 @@ uv pip sync requirements.txt
 
 The application will startup and you will be provided a local URL to the application.
 
-## Running the terminal (CLI) chat client: `chat_cli.py`
+## CLI Deployment - Running the terminal (CLI) chat client: `chat_cli.py`
 
 A lightweight terminal-based client is included for environments where Streamlit isn't available or when you prefer a CLI workflow. The CLI mirrors the same agent logic used by the Streamlit app but interacts via stdin/stdout.
 
@@ -173,7 +173,7 @@ Notes:
 - If you rely on Streamlit-specific session-state features, the CLI may behave slightly differently; the core message flow and client API usage remain the same.
 - The same flexibility as the Streamlit app applies: use environment variables for default agent configuration, or supply an `.aia` file to run any agent on demand.
 
-## Production Deploy AI Agent to `Streamlit Community Cloud`
+## Streamlit Community Cloud Deployment - Production Deploy AI Agent to `Streamlit Community Cloud`
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Streamlit Community Cloud, including configuration of required environment variables using a `.env` file, or `env.yaml`.
 
@@ -251,11 +251,11 @@ host_url = "https://microservice-72loomfx5q-uc.a.run.app"
     10. A JSON key file will be downloaded to your computer. This file contains the credentials needed to authenticate as the service account.
     11. Use the contents of this file in the `Client Secret` field of your connector in Pinion AI Studio configuration. Save and select the connector in your desired Agent.
 
-## Production Deploy AI Agent to `Google Cloud Run`
+## GCP Deployment - Production Deploy AI Agent to `Google Cloud Run`
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
 
-## Prerequisites
+### Prerequisites
 
 Before you begin, ensure you have the following installed and configured:
 
