@@ -22,9 +22,19 @@ dependencies = [
     "streamlit",
     "Pillow",
     "pinionai[all]",  # PinionAI Client Core + all optional dependencies (line 36-46)
+    "httpx",
+    "python-dotenv",
+    "aiohttp",
 
     # Google Cloud & Vertex AI
     "google-cloud-logging",
+
+    # Slack Integration
+    "slack-bolt",
+
+    # Microsoft Teams Integration
+    "botbuilder-core",
+    "botbuilder-integration-aiohttp",
 
     # MCP Server Dependencies (e.g., for weather_server.py)
     "geopy",

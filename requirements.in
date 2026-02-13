@@ -11,3 +11,9 @@
 
 # For development GitHub install (uncomment if you want to install from GitHub instead)
 # git+https://github.com/pinionai/pinionai-package.git
+slack-bolt
+botbuilder-core
+botbuilder-integration-aiohttp
+httpx
+python-dotenv
+aiohttp

@@ -1,4 +1,4 @@
-# PinionAI Agent Runners - GCP, Streamlit Cloud or CLI Examples
+# PinionAI Agent Runners - GCP, Streamlit Cloud, Slack, Teams and CLI Examples
 
 This project builds Agentic AI application using the [Streamlit](https://streamlit.io/) framework or a terminal CLI, and the [PinionAI python library](https://pypi.org/project/pinionai/) to serve Agents you author in PinionAI studio.
 
@@ -69,7 +69,6 @@ uv pip sync requirements.txt
 > uv is a modern, extremely fast Python package installer from the creators of ruff. If you don't have it, you can install it with pip install uv or by following the official installation guide. Using uv can significantly speed up environment creation and dependency installation.
 
 3. Your application requires access to a few environment variables, see the .env.example file. Use this dotenv file as a template. Copy it to `.env` and fill in your actual credentials, and do not commit it to version control.
-
    - client_id = '<YOUR_CLIENT_ID_HERE>'
    - client_secret = '<YOUR_CLIENT_SECRET_HERE>'
    - agent_id = '<YOUR_AGENT_ID_HERE>'
@@ -123,6 +122,94 @@ Run the CLI client:
 ```bash
 python chat_cli.py
 ```
+
+## Slack Deployment - Running the Slack bot: `chat_slack.py`
+
+A Slack-based client is included to allow interacting with your PinionAI agents directly from a Slack channel. It uses `slack_bolt` with Socket Mode for easy setup without needing a public endpoint.
+
+### Prerequisites
+
+1.  **Create a Slack App:** Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app.
+2.  **Tokens:**
+    - **Bot User OAuth Token (`SLACK_BOT_TOKEN`):** Found under "OAuth & Permissions". Needs `chat:write` and `files:read` scopes.
+    - **App-Level Token (`SLACK_APP_TOKEN`):** Found under "Basic Information". Needs `connections:write` scope and must be created with the `socket_mode` scope.
+3.  **Socket Mode:** Enable Socket Mode in your Slack app settings.
+4.  **Event Subscriptions:** Enable Events and subscribe to `message.channels` (and `message.groups` if needed).
+
+### Setup and Running
+
+Install dependencies (ensure `slack-bolt` is installed):
+
+```bash
+uv pip compile requirements.in -o requirements.txt
+uv pip sync requirements.txt
+```
+
+Set environment variables in your `.env` file:
+
+```env
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+host_url=https://microservice-72loomfx5q-uc.a.run.app
+# Optional: default agent
+client_id=<YOUR_CLIENT_ID_HERE>
+client_secret=<YOUR_CLIENT_SECRET_HERE>
+agent_id=<YOUR_AGENT_ID_HERE>
+```
+
+Run the Slack bot:
+
+```bash
+python chat_slack.py
+```
+
+### Features
+
+- **Message Interaction:** Just type in the channel to talk to the agent.
+- **AIA File Loading:** Upload a `.aia` file to the channel. The bot will load that agent for all subsequent messages in that channel.
+- **Private AIA Files:** If an AIA file is encrypted, the bot will ask for the `key_secret` in the next message.
+- **/end:** Use the `/end` command (as a regular message) to clear the current agent session.
+- **!end** Alternatively, if you don't want to configure a Slack command for /end, you can simply type !end as a regular message to clear your session.
+
+## Microsoft Teams Deployment - Running the Teams bot: `chat_teams.py`
+
+A Microsoft Teams-based client is included to allow interacting with your PinionAI agents from Teams. It uses the Microsoft Bot Framework SDK.
+
+### Prerequisites
+
+1.  **Register a Bot:** Register a bot with the [Microsoft Bot Framework](https://dev.botframework.com/) or via the Azure Portal (Azure Bot service).
+2.  **App ID and Password:** Obtain your Microsoft App ID and App Password.
+3.  **Messaging Endpoint:** Your bot will need a public HTTPS endpoint (e.g., using `ngrok` for local testing) pointing to `/api/messages`.
+
+### Setup and Running
+
+Install dependencies:
+
+```bash
+uv pip compile requirements.in -o requirements.txt
+uv pip sync requirements.txt
+```
+
+Set environment variables in your `.env` file:
+
+```env
+TEAMS_APP_ID=your-app-id
+TEAMS_APP_PASSWORD=your-app-password
+host_url=https://microservice-72loomfx5q-uc.a.run.app
+```
+
+Run the Teams bot:
+
+```bash
+python chat_teams.py
+```
+
+### Features
+
+- **Message Interaction:** Talk to the agent in Teams.
+- **AIA File Loading:** Upload a `.aia` file as an attachment.
+- **Private AIA Files:** Handles encrypted agents via secret key prompt.
+- **/end:** Reset the session.
 
 #### Loading an Agent from an AIA File
 
@@ -457,6 +544,18 @@ gcloud run deploy ${IMAGE_NAME} \
 
 ```bash
 --env-vars-file deploy/prod-aia-file/env.yaml
+```
+
+**OR**
+
+- For Slack or Teams specific deployments, use their respective YAML files:
+
+```bash
+# For Slack
+--env-vars-file deploy/prod-slack/env.yaml
+
+# For Teams
+--env-vars-file deploy/prod-teams/env.yaml
 ```
 
 During the deployment process, `gcloud` will prompt you to confirm the settings. Once you confirm, it will deploy the service and provide you with a **Service URL**.
