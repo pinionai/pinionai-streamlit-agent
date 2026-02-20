@@ -623,7 +623,7 @@ gcloud run services update SERVICE_NAME --cpu-throttling --cpu-throttling=never
 By default, the application will install `pinionai` from PyPI.
 If you want to install the latest development version from GitHub, comment out the `pinionai` line in `requirements.in` (or `requirements.txt`) and uncomment the GitHub line.
 
-## Generic App Deployment cheatsheet
+## Generic App Deployment cheatsheet - AIA Files
 
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
@@ -632,6 +632,45 @@ export SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gservice
 export REGION="us-central1" # Or your preferred region
 export REPOSITORY="pinionai-chat-files"
 export IMAGE_NAME="pinionai-chat-files"
+export IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
+```
+
+Only once here
+
+```bash
+gcloud artifacts repositories create ${REPOSITORY} \
+    --repository-format=docker \
+    --location=${REGION} \
+    --description="Docker repository for the PINION AI Chat AIA File application"
+```
+
+```bash
+gcloud builds submit --tag ${IMAGE_URI}
+```
+
+```bash
+gcloud run deploy ${IMAGE_NAME} \
+    --image=${IMAGE_URI} \
+    --port=8080 \
+    --service-account=${SERVICE_ACCOUNT_EMAIL} \
+    --project=${PROJECT_ID} \
+    --region=${REGION} \
+    --platform=managed \
+    --allow-unauthenticated \
+    --min-instances 0 \
+    --cpu-boost \
+    --env-vars-file deploy/prod-aia-file/env.yaml
+```
+
+## Generic App Deployment cheatsheet - Cloud Run for Slack
+
+```bash
+export PROJECT_ID=$(gcloud config get-value project)
+export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
+export SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+export REGION="us-central1" # Or your preferred region
+export REPOSITORY="pinionai-chat-slack"
+export IMAGE_NAME="pinionai-chat-slack"
 export IMAGE_URI="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${IMAGE_NAME}:latest"
 ```
 
