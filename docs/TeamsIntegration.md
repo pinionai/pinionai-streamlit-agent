@@ -3,6 +3,7 @@
 This guide provides step-by-step instructions for setting up a Microsoft Teams Bot, configuring the PinionAI Teams bot (`chat_teams.py`), and establishing a secure tunnel for local testing.
 
 ## Table of Contents
+
 1. [Registering the Azure Bot](#1-registering-the-azure-bot)
 2. [Obtaining Credentials](#2-obtaining-credentials)
 3. [Configuring Channels](#3-configuring-channels)
@@ -39,7 +40,7 @@ You need the Microsoft App ID and Client Secret to authenticate your bot.
 4.  Next to the App ID, click the **Manage Password** link.
 5.  Under **Certificates & secrets**, click **+ New client secret**.
 6.  Provide a description (e.g., "TeamsBotSecret") and click **Add**.
-7.  **Value:** Copy the **Value** string immediately. This is your `TEAMS_APP_PASSWORD`. *Note: This value is hidden once you leave the page.*
+7.  **Value:** Copy the **Value** string immediately. This is your `TEAMS_APP_PASSWORD`. _Note: This value is hidden once you leave the page._
 
 ---
 
@@ -59,18 +60,26 @@ By default, your bot is not connected to Microsoft Teams.
 Because Teams communicates via webhooks, your local development server needs a public HTTPS endpoint.
 
 1.  **Install ngrok:**
+
     ```bash
-    brew install ngrok/ngrok/ngrok  # macOS
+    brew install ngrok  # macOS
     ```
-2.  **Start the tunnel:**
+
+2.  **Install nrgok authtoken**
+
+    ```bash
+    ngrok config add-authtoken 2WzLpXXXXXetc
+    ```
+
+3.  **Start the tunnel:**
     ```bash
     ngrok http 3978
     ```
-3.  **Copy the Forwarding URL:** (e.g., `https://a1b2-c3d4.ngrok-free.app`).
-4.  **Set Messaging Endpoint:**
+4.  **Copy the Forwarding URL:** (e.g., `https://your-url.ngrok-free.app`).
+5.  **Set Messaging Endpoint:**
     - Go back to **Azure Bot > Configuration**.
     - In **Messaging endpoint**, paste your ngrok URL and append `/api/messages`.
-    - Example: `https://a1b2-c3d4.ngrok-free.app/api/messages`
+    - Example: `https://your-url.ngrok-free.app/api/messages`
     - Click **Apply**.
 
 ---
@@ -94,15 +103,18 @@ host_url=https://microservice-72loomfx5q-uc.a.run.app
 ## 6. Usage Guide
 
 ### Starting the Bot
+
 1. Activate your environment: `source pinionai-streamlit/bin/activate`
 2. Run the bot: `python chat_teams.py`
 
 ### Testing in Teams
+
 1. In the Azure Portal, go to **Azure Bot > Channels**.
 2. Click **Open in Teams**.
 3. Alternatively, search for your `TEAMS_APP_ID` directly in the Teams search bar.
 
 ### Features
+
 - **Direct Chat:** Simply type a message to start a conversation.
 - **AIA File Loading:** Upload a `.aia` file as an attachment to dynamically switch agents for that conversation.
 - **Encrypted Agents:** If an uploaded AIA file is private, the bot will prompt you for the `key_secret`.

@@ -82,7 +82,7 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.2.5a`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.2.6`'
     },
     layout="wide"
 )
@@ -140,38 +140,68 @@ if not os.environ.get("agent_id"):
         with st.form(f"agent_file"):
             uploaded_file = st.file_uploader("Upload AIA agent file or shortcut", type="aia", accept_multiple_files=False,
                                             help="Select the File version of the agent to test.")
-            if st.form_submit_button("Load AIA Agent", help="Reset the test agent and clear the chat history."):
-                if uploaded_file is None:
-                    st.error("Please upload an agent file first.")
-                    st.stop()
-                else: # Session state is cleared before attempting to load
-                    # keys_to_keep = ["logged_in", "user_login", "user_email", "accountSelectedUId", "accountPermissions"]
-                    keys_to_delete = [key for key in st.session_state.keys()] # if key not in keys_to_keep]
-                    for key in keys_to_delete:
-                        del st.session_state[key]
-                    try:
-                        file_bytes = uploaded_file.getvalue()
-                        stringio = StringIO(file_bytes.decode("utf-8"))
-                        client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
-                            file_stream=stringio.read(),
-                            host_url=os.environ.get("host_url")
-                            ))
-                        if init_message == 'key_secret required for private version':
-                            st.session_state.awaiting_key_secret = True
-                            st.session_state.uploaded_file_bytes = file_bytes
-                            st.rerun()
-                        elif client:
-                            st.session_state.pinion_client = client
-                            st.rerun() # Rerun to load the new agent's chat
-                        else:
-                            st.error(f"Failed to load agent: {init_message}")
-                            st.stop()
-                    except Exception as e:
-                        st.error(f"Failed to initialize PinionAI client from AIA file: {e}")
+            col_b1, col_b2 = st.columns(2)
+            with col_b1:
+                if st.form_submit_button("Load AIA Agent", help="Reset the test agent and clear the chat history."):
+                    if uploaded_file is None:
+                        st.error("Please upload an agent file first.")
                         st.stop()
-            elif st.session_state.get("pinion_client") is None:
-                st.info("Please upload an AIA file or shortcut.")
-                st.stop()
+                    else: # Session state is cleared before attempting to load
+                        # keys_to_keep = ["logged_in", "user_login", "user_email", "accountSelectedUId", "accountPermissions"]
+                        keys_to_delete = [key for key in st.session_state.keys()] # if key not in keys_to_keep]
+                        for key in keys_to_delete:
+                            del st.session_state[key]
+                        try:
+                            file_bytes = uploaded_file.getvalue()
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                                file_stream=stringio.read(),
+                                host_url=os.environ.get("host_url")
+                                ))
+                            if init_message == 'key_secret required for private version':
+                                st.session_state.awaiting_key_secret = True
+                                st.session_state.uploaded_file_bytes = file_bytes
+                                st.rerun()
+                            elif client:
+                                st.session_state.pinion_client = client
+                                st.rerun() # Rerun to load the new agent's chat
+                            else:
+                                st.error(f"Failed to load agent: {init_message}")
+                                st.stop()
+                        except Exception as e:
+                            st.error(f"Failed to initialize PinionAI client from AIA file: {e}")
+                            st.stop()
+                elif st.session_state.get("pinion_client") is None:
+                    st.info("Please upload an AIA file or shortcut.")
+                    st.stop()
+            with col_b2:
+                if st.form_submit_button("Add AIA Agent", help="Add this AIA file's capabilities to your current session."):
+                    if uploaded_file is None:
+                        st.error("Please upload an agent file first.")
+                    elif "pinion_client" not in st.session_state:
+                        st.error("No active session to merge into.")
+                    else:
+                        try:
+                            file_bytes = uploaded_file.getvalue()
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            
+                            result_msg = run_coroutine_in_event_loop(st.session_state.pinion_client.add_agent_from_aia(
+                                file_stream=stringio.read()
+                            ))
+
+                            if result_msg == 'key_secret required for private version':
+                                # Set flag and store file bytes to show key form
+                                st.session_state.merging_aia = True
+                                st.session_state.uploaded_file_bytes = file_bytes
+                                st.rerun()
+                            elif "Error" not in result_msg:
+                                st.success(result_msg)
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(result_msg)
+                        except Exception as e:
+                            st.error(f"Merge analysis failed: {e}")
 else:                    
     if "pinion_client" not in st.session_state:
             try:

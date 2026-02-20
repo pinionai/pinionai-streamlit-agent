@@ -4,9 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pinionai-chat"
-version = "0.2.5"
+version = "0.2.6"
 description = "PinionAI Client application utilizing Streamlit Framework."
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.14"
 authors = [
     { name="Alan Johnson", email="alan@pinionai.com" },
 ]

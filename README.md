@@ -1,8 +1,15 @@
 # PinionAI Agent Runners - GCP, Streamlit Cloud, Slack, Teams and CLI Examples
 
-This project builds Agentic AI application using the [Streamlit](https://streamlit.io/) framework or a terminal CLI, and the [PinionAI python library](https://pypi.org/project/pinionai/) to serve Agents you author in PinionAI studio.
+This project allows you to build Agentic AI application using the [Streamlit](https://streamlit.io/) framework, or communicate with it via Slack, Teams or a local terminal CLI, and the [PinionAI python library](https://pypi.org/project/pinionai/) to serve Agents you author in PinionAI studio.
 
-Instructions are included for running the application locally, deploying this application to Cloud Run or Streamlit Community Cloud.
+Instructions below are included for deploying this application to Cloud Run or Streamlit Community Cloud. You can run the application locally, configure it to be accessible in Slack or Teams, as well as an online or local Streamlit chat interface.
+
+If desired, you can also iframe the project once deployed inside your current infrastructure.  
+See: [iframing PinionAI](docs/iframe_PinionAI.md)
+
+For complete documentation please see: [Full Documentation](https://docs.pinionai.com)
+
+For questions or support please contact us at: [Contact Form](https://pinionai.com/contact)
 
 ## Local Deployment - Locally Running your AI Agent
 
@@ -94,7 +101,7 @@ uv pip sync requirements.txt
 
 The application will startup and you will be provided a local URL to the application.
 
-## CLI Deployment - Running the terminal (CLI) chat client: `chat_cli.py`
+## CLI Deployment - Running the local terminal (CLI) chat client: `chat_cli.py`
 
 A lightweight terminal-based client is included for environments where Streamlit isn't available or when you prefer a CLI workflow. The CLI mirrors the same agent logic used by the Streamlit app but interacts via stdin/stdout.
 
@@ -126,6 +133,8 @@ python chat_cli.py
 ## Slack Deployment - Running the Slack bot: `chat_slack.py`
 
 A Slack-based client is included to allow interacting with your PinionAI agents directly from a Slack channel. It uses `slack_bolt` with Socket Mode for easy setup without needing a public endpoint.
+
+[Slack Integration Document](docs/SlackIntegration.md)
 
 ### Prerequisites
 
@@ -175,6 +184,8 @@ python chat_slack.py
 
 A Microsoft Teams-based client is included to allow interacting with your PinionAI agents from Teams. It uses the Microsoft Bot Framework SDK.
 
+[Teams Integration Document](docs/TeamsIntegration.md)
+
 ### Prerequisites
 
 1.  **Register a Bot:** Register a bot with the [Microsoft Bot Framework](https://dev.botframework.com/) or via the Azure Portal (Azure Bot service).
@@ -195,7 +206,7 @@ Set environment variables in your `.env` file:
 ```env
 TEAMS_APP_ID=your-app-id
 TEAMS_APP_PASSWORD=your-app-password
-host_url=https://microservice-72loomfx5q-uc.a.run.app
+host_url=https://api.pinionai.com
 ```
 
 Run the Teams bot:
@@ -264,6 +275,8 @@ Notes:
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Streamlit Community Cloud, including configuration of required environment variables using a `.env` file, or `env.yaml`.
 
+[Steamlit Deployment Document](docs/StreamlitDeploy.md)
+
 ## Why Streamlit Community Cloud:
 
 Streamlit Community Cloud is a free, web-based platform for building and sharing data apps created with the Streamlit framework. It allows users to easily deploy their apps from GitHub repositories and share them with a public or private audience with minimal configuration. The platform handles containerization and provides a simple interface for managing apps, and it can be integrated with tools like GitHub Codespaces for browser-based development.
@@ -293,7 +306,7 @@ This is the most straightforward method for quick deployments, especially for de
 client_id = "<YOUR_CLIENT_ID_HERE>"
 client_secret = "<YOUR_CLIENT_SECRET_HERE>"
 agent_id = "<YOUR_AGENT_ID_HERE>"
-host_url = "https://microservice-72loomfx5q-uc.a.run.app"
+host_url = "https://api.pinionai.com"
 '''
 ```
 
@@ -302,7 +315,7 @@ host_url = "https://microservice-72loomfx5q-uc.a.run.app"
 - For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need client_id, client_secret or a specific agent_id.
 
 ```bash
-host_url = "https://microservice-72loomfx5q-uc.a.run.app"
+host_url = "https://api.pinionai.com"
 '''
 ```
 
@@ -341,6 +354,8 @@ host_url = "https://microservice-72loomfx5q-uc.a.run.app"
 ## GCP Deployment - Production Deploy AI Agent to `Google Cloud Run`
 
 This guide provides step-by-step instructions on how to deploy the Pinion AI chat application to Google Cloud Run, including configuration of required environment variables using a `.env` file.
+
+[GCP Deployment Document](docs/GCPDeploy.md)
 
 ### Prerequisites
 
@@ -518,7 +533,7 @@ Convert your `.env` file to a YAML file (e.g., `env.yaml`) and save:
 client_id: <YOUR_CLIENT_ID_HERE>
 client_secret: <YOUR_CLIENT_SECRET_HERE>
 agent_id: <YOUR_AGENT_ID_HERE>
-host_url: https://microservice-72loomfx5q-uc.a.run.app
+host_url: https://api.pinionai.com
 version: "" # specific version include: draft, development, test, live, archived
 ```
 
