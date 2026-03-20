@@ -314,7 +314,7 @@ pillow==11.3.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.2.6
+pinionai==0.2.8
     # via pinionai-chat
 ply==3.11
     # via jsonpath-ng
@@ -339,6 +339,14 @@ protobuf==6.32.0
     #   pinionai
     #   proto-plus
     #   streamlit
+psycopg==3.3.3
+    # via
+    #   -r requirements.in
+    #   pinionai
+psycopg-binary==3.3.3
+    # via psycopg
+psycopg-pool==3.3.0
+    # via psycopg
 pyarrow==21.0.0
     # via streamlit
 pyasn1==0.6.1
@@ -480,6 +488,7 @@ typing-extensions==4.14.1
     #   openai
     #   openapi-core
     #   opentelemetry-api
+    #   psycopg-pool
     #   pydantic
     #   pydantic-core
     #   streamlit

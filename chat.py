@@ -82,57 +82,81 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.2.6`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.2.8`'
     },
     layout="wide"
 )
 # state for handling private AIA files
 if 'awaiting_key_secret' not in st.session_state:
     st.session_state.awaiting_key_secret = False
+if 'merging_aia' not in st.session_state:
+    st.session_state.merging_aia = False
 if 'uploaded_file_bytes' not in st.session_state:
     st.session_state.uploaded_file_bytes = None
 
 if not os.environ.get("agent_id"):
-    if st.session_state.awaiting_key_secret:
+    if st.session_state.awaiting_key_secret or st.session_state.get("merging_aia"):
         st.warning("This AIA file is private and requires a secret key to decrypt.")
         with st.form("key_secret_form"):
             key_secret = st.text_input("Enter the secret key:", type="password")
             col1, col2 = st.columns(2)
             with col1:
-                if st.form_submit_button("Unlock and Load Agent", use_container_width=True):
+                button_label = "Unlock and Merge Agent" if st.session_state.get("merging_aia") else "Unlock and Load Agent"
+                if st.form_submit_button(button_label, width="stretch"):
                     if not key_secret:
                         st.error("Please enter a secret key.")
                     else:
-                        # Clear main session state before loading new agent
-                        keys_to_keep = ["logged_in", "user_login", "user_email", "accountSelectedUId", "accountPermissions", "awaiting_key_secret", "uploaded_file_bytes"]
-                        keys_to_delete = [key for key in st.session_state.keys() if key not in keys_to_keep]
-                        for key in keys_to_delete:
-                            del st.session_state[key]
-                        with st.spinner("Decrypting and loading agent..."):
-                            try:
-                                file_bytes = st.session_state.uploaded_file_bytes
-                                stringio = StringIO(file_bytes.decode("utf-8"))
-                                client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
-                                    file_stream=stringio.read(),
-                                    host_url=os.environ.get("host_url"),
-                                    key_secret=key_secret
-                                ))
-                                if client:
-                                    st.session_state.pinion_client = client
-                                    st.session_state.awaiting_key_secret = False # Clean up temp state on success
-                                    st.session_state.uploaded_file_bytes = None
-                                    st.success("Agent loaded successfully!")
-                                    st.rerun()
-                                else:
-                                    st.error(f"Failed to load agent: {init_message}")
+                        if st.session_state.get("merging_aia"):
+                            with st.spinner("Decrypting and merging agent..."):
+                                try:
+                                    file_bytes = st.session_state.uploaded_file_bytes
+                                    stringio = StringIO(file_bytes.decode("utf-8"))
+                                    result_msg = run_coroutine_in_event_loop(st.session_state.pinion_client.add_agent_from_aia(
+                                        file_stream=stringio.read(),
+                                        key_secret=key_secret
+                                    ))
+                                    if "Error" not in result_msg:
+                                        st.session_state.merging_aia = False
+                                        st.session_state.uploaded_file_bytes = None
+                                        st.success(result_msg)
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.error(result_msg)
+                                except Exception as e:
+                                    st.error(f"Merge failed: {e}")
+                        else:
+                            # Clear main session state before loading new agent
+                            keys_to_keep = ["logged_in", "user_login", "user_email", "accountSelectedUId", "accountPermissions", "awaiting_key_secret", "uploaded_file_bytes"]
+                            keys_to_delete = [key for key in st.session_state.keys() if key not in keys_to_keep]
+                            for key in keys_to_delete:
+                                del st.session_state[key]
+                            with st.spinner("Decrypting and loading agent..."):
+                                try:
+                                    file_bytes = st.session_state.uploaded_file_bytes
+                                    stringio = StringIO(file_bytes.decode("utf-8"))
+                                    client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                                        file_stream=stringio.read(),
+                                        host_url=os.environ.get("host_url"),
+                                        key_secret=key_secret
+                                    ))
+                                    if client:
+                                        st.session_state.pinion_client = client
+                                        st.session_state.awaiting_key_secret = False # Clean up temp state on success
+                                        st.session_state.uploaded_file_bytes = None
+                                        st.success("Agent loaded successfully!")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"Failed to load agent: {init_message}")
+                                        st.stop()
+                                except Exception as e:
+                                    st.error(f"Failed to load agent with provided key: {e}")
                                     st.stop()
-                            except Exception as e:
-                                st.error(f"Failed to load agent with provided key: {e}")
-                                st.stop()
             with col2:
-                if st.form_submit_button("Cancel", use_container_width=True):
+                if st.form_submit_button("Cancel", width="stretch"):
                     # Clean up temp state and go back
                     st.session_state.awaiting_key_secret = False
+                    st.session_state.merging_aia = False
                     st.session_state.uploaded_file_bytes = None
                     st.rerun()
         st.stop()

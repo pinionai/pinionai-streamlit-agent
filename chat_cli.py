@@ -189,7 +189,12 @@ def main():
     var = client.var
     print(var.get("agentTitle"),"PinionAI Terminal Chat")
     print(var.get("agentSubtitle"))
-    print("Type your message and press Enter. Use /end to quit.")
+    print("Type your message and press Enter.")
+    print("Commands:")
+    print("  /add <path> - merge an AIA agent into the current session")
+    print("  /end        - end chat session and exit")
+    print("  /continue   - continue polling or force refresh")
+    
     user_img = var.get("userImage")
     assistant_img = var.get("assistImage")
 
@@ -209,16 +214,52 @@ def main():
 
         if not prompt:
             continue
-        if prompt.strip().lower() == "/end":
+        
+        trimmed_prompt = prompt.strip().lower()
+        if trimmed_prompt == "/end":
             run_coroutine_in_event_loop(client.end_grpc_chat_session())
             print("Chat ended.")
             cleanup_client(client)
             break
-        if prompt.strip().lower() == "/continue":
+        if trimmed_prompt == "/continue":
             print("Continuing / refreshing...")
             # show any new messages
             if poll_for_updates(client, timeout=5):
                 display_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
+            continue
+        
+        if trimmed_prompt.startswith("/add "):
+            aia_path = prompt.strip()[5:].strip()
+            if not os.path.exists(aia_path):
+                print(f"Error: File not found at '{aia_path}'")
+                continue
+            try:
+                with open(aia_path, "rb") as f:
+                    raw = f.read()
+                file_text = raw.decode("utf-8")
+                
+                result_msg = run_coroutine_in_event_loop(client.add_agent_from_aia(
+                    file_stream=file_text
+                ))
+
+                if result_msg == 'key_secret required for private version':
+                    print("This AIA file is private and requires a secret key to decrypt.")
+                    key_secret = getpass.getpass("Enter key_secret: ")
+                    result_msg = run_coroutine_in_event_loop(client.add_agent_from_aia(
+                        file_stream=file_text,
+                        key_secret=key_secret
+                    ))
+                
+                if "Error" not in result_msg:
+                    print(f"Success: {result_msg}")
+                    # Refresh vars as they might have changed
+                    var = client.var
+                    user_img = var.get("userImage")
+                    assistant_img = var.get("assistImage")
+                else:
+                    print(f"Merge failed: {result_msg}")
+            except Exception as e:
+                print(f"Error merging AIA file: {e}")
             continue
 
         # Add user message

@@ -38,7 +38,7 @@ app = AsyncApp(token=SLACK_BOT_TOKEN)
 # Session management: channel_id -> AsyncPinionAIClient
 sessions = {}
 
-# State management for private AIA files: channel_id -> { "file_content": ..., "awaiting_secret": True }
+# State management for private AIA files: channel_id -> { "file_content": ..., "awaiting_secret": True, "is_merge": False }
 pending_agents = {}
 
 def clean_slack_text(text: str) -> str:
@@ -114,18 +114,29 @@ async def handle_message_events(event, say):
     if channel_id in pending_agents and pending_agents[channel_id].get("awaiting_secret"):
         pending = pending_agents.pop(channel_id)
         try:
-            await say("Decrypting and loading agent...")
-            p_client, init_message = await AsyncPinionAIClient.create_from_stream(
-                file_stream=pending["file_content"],
-                host_url=os.environ.get("host_url"),
-                key_secret=text
-            )
-            if p_client:
-                sessions[channel_id] = p_client
-                greeting = p_client.var.get("agentStart", "Agent loaded successfully!")
-                await say(f"*{p_client.var.get('agentTitle', 'Agent')}* loaded.\n{greeting}")
+            if pending.get("is_merge"):
+                await say("Decrypting and merging agent...")
+                result_msg = await sessions[channel_id].add_agent_from_aia(
+                    file_stream=pending["file_content"],
+                    key_secret=text
+                )
+                if "Error" not in result_msg:
+                    await say(f"Agent merged successfully: {result_msg}")
+                else:
+                    await say(f"Failed to merge agent: {result_msg}")
             else:
-                await say(f"Failed to load agent: {init_message}")
+                await say("Decrypting and loading agent...")
+                p_client, init_message = await AsyncPinionAIClient.create_from_stream(
+                    file_stream=pending["file_content"],
+                    host_url=os.environ.get("host_url"),
+                    key_secret=text
+                )
+                if p_client:
+                    sessions[channel_id] = p_client
+                    greeting = p_client.var.get("agentStart", "Agent loaded successfully!")
+                    await say(f"*{p_client.var.get('agentTitle', 'Agent')}* loaded.\n{greeting}")
+                else:
+                    await say(f"Failed to load agent: {init_message}")
         except Exception as e:
             logger.error(f"Error loading agent with secret: {e}")
             await say(f"Error loading agent: {e}")
@@ -143,25 +154,46 @@ async def handle_message_events(event, say):
                         response.raise_for_status()
                         file_content = response.text
                         
-                        p_client, init_message = await AsyncPinionAIClient.create_from_stream(
-                            file_stream=file_content,
-                            host_url=os.environ.get("host_url")
-                        )
-                        
-                        if init_message == 'key_secret required for private version':
-                            pending_agents[channel_id] = {
-                                "file_content": file_content,
-                                "awaiting_secret": True
-                            }
-                            await say("This AIA file is private and requires a secret key. Please reply with the key.")
-                            return
-                        elif p_client:
-                            sessions[channel_id] = p_client
-                            greeting = p_client.var.get("agentStart", "Agent loaded successfully!")
-                            await say(f"*{p_client.var.get('agentTitle', 'Agent')}* loaded from file.\n{greeting}")
-                            return
+                        if channel_id in sessions:
+                            # Additive merge
+                            result_msg = await sessions[channel_id].add_agent_from_aia(
+                                file_stream=file_content
+                            )
+                            if result_msg == 'key_secret required for private version':
+                                pending_agents[channel_id] = {
+                                    "file_content": file_content,
+                                    "awaiting_secret": True,
+                                    "is_merge": True
+                                }
+                                await say("This AIA file is private and requires a secret key to merge. Please reply with the key.")
+                                return
+                            elif "Error" not in result_msg:
+                                await say(f"Agent merged successfully: {result_msg}")
+                                return
+                            else:
+                                await say(f"Could not merge agent: {result_msg}")
                         else:
-                            await say(f"Could not load agent: {init_message}")
+                            # Load new session
+                            p_client, init_message = await AsyncPinionAIClient.create_from_stream(
+                                file_stream=file_content,
+                                host_url=os.environ.get("host_url")
+                            )
+                            
+                            if init_message == 'key_secret required for private version':
+                                pending_agents[channel_id] = {
+                                    "file_content": file_content,
+                                    "awaiting_secret": True,
+                                    "is_merge": False
+                                }
+                                await say("This AIA file is private and requires a secret key. Please reply with the key.")
+                                return
+                            elif p_client:
+                                sessions[channel_id] = p_client
+                                greeting = p_client.var.get("agentStart", "Agent loaded successfully!")
+                                await say(f"*{p_client.var.get('agentTitle', 'Agent')}* loaded from file.\n{greeting}")
+                                return
+                            else:
+                                await say(f"Could not load agent: {init_message}")
                     except Exception as e:
                         logger.error(f"Error downloading/processing AIA file: {e}")
                         await say(f"Error processing AIA file: {e}")

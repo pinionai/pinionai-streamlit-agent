@@ -17,3 +17,4 @@ botbuilder-integration-aiohttp
 httpx
 python-dotenv
 aiohttp
+psycopg[binary,pool]
