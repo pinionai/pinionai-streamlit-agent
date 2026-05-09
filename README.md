@@ -67,6 +67,8 @@ source pinionai-streamlit/bin/activate # 2. Activate the venv
 # 3. Compile your dependencies from pyproject.toml into a lockfile.
 #    This reads requirements.in and creates/updates requirements.txt.
 uv pip compile requirements.in -o requirements.txt
+# or
+uv pip compile --upgrade requirements.in -o requirements.txt
 
 # 4. Install the locked dependencies into your venv.
 uv pip sync requirements.txt
@@ -198,6 +200,8 @@ Install dependencies:
 
 ```bash
 uv pip compile requirements.in -o requirements.txt
+# or
+uv pip compile --upgrade requirements.in -o requirements.txt
 uv pip sync requirements.txt
 ```
 
@@ -664,6 +668,10 @@ gcloud run deploy ${IMAGE_NAME} \
 
 ## Generic App Deployment cheatsheet - Cloud Run for Slack
 
+**Change Dockerfile to launch the chat_slack.py file.**
+Change chat.py to chat_slack.py if you want to run the Slack version of the app
+CMD ["streamlit", "run", "chat_slack.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.headless=true"]
+
 ```bash
 export PROJECT_ID=$(gcloud config get-value project)
 export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
@@ -680,7 +688,7 @@ Only once here
 gcloud artifacts repositories create ${REPOSITORY} \
     --repository-format=docker \
     --location=${REGION} \
-    --description="Docker repository for the PINION AI Chat AIA File application"
+    --description="Docker repository for the PINION AI Slack application"
 ```
 
 ```bash
@@ -698,5 +706,5 @@ gcloud run deploy ${IMAGE_NAME} \
     --allow-unauthenticated \
     --min-instances 0 \
     --cpu-boost \
-    --env-vars-file deploy/prod-aia-file/env.yaml
+    --env-vars-file deploy/prod-slack/env.yaml
 ```

@@ -62,5 +62,5 @@ USER appuser
 # Expose the port that Streamlit will run on
 EXPOSE 8080
 
-# Run the Streamlit application
+# Run the Streamlit application  -- *** Change chat.py to chat_slack.py if you want to run the Slack version of the app
 CMD ["streamlit", "run", "chat.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.headless=true"]
