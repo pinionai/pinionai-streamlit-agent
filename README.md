@@ -153,6 +153,8 @@ Install dependencies (ensure `slack-bolt` is installed):
 
 ```bash
 uv pip compile requirements.in -o requirements.txt
+# or
+uv pip compile --upgrade requirements.in -o requirements.txt
 uv pip sync requirements.txt
 ```
 
@@ -668,7 +670,7 @@ gcloud run deploy ${IMAGE_NAME} \
 
 ## Generic App Deployment cheatsheet - Cloud Run for Slack
 
-**Change Dockerfile to launch the chat_slack.py file.**
+**!!! Change Dockerfile to launch the chat_slack.py file.**
 Change chat.py to chat_slack.py if you want to run the Slack version of the app
 CMD ["streamlit", "run", "chat_slack.py", "--server.port=8080", "--server.address=0.0.0.0", "--server.headless=true"]
 

@@ -82,7 +82,7 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.3.0`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.3.1`'
     },
     layout="wide"
 )
@@ -291,15 +291,29 @@ if client.transfer_requested:
 display_chat_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
 
 # Accept user input
-if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be first message
-    client.add_message_to_history("user", prompt)
-    with st.chat_message("user", avatar=user_img):
-        st.markdown(prompt)
+input_text = None
 
+if var.get("sttAudio"):
+    if prompt := st.chat_input(var["agentStart"], accept_audio=True):
+        if prompt.text:
+            input_text = prompt.text
+        if prompt.audio:
+            with st.chat_message("assistant", avatar=assistant_img):
+                with st.spinner("Processing audio..."):
+                    # Convert audio to text
+                    input_text = run_coroutine_in_event_loop(client.convert_audio_to_text(prompt.audio))
+else:
+    if prompt_str := st.chat_input(var["agentStart"]):
+        input_text = prompt_str
+
+if input_text is not None:
+    client.add_message_to_history("user", input_text)
+    with st.chat_message("user", avatar=user_img):
+        st.markdown(input_text)
     if client.transfer_requested:  # LIVE AGENT MODE
         if ensure_grpc_is_active(client):
             run_coroutine_in_event_loop(client.update_pinion_session())
-            run_coroutine_in_event_loop(client.send_grpc_message(prompt))
+            run_coroutine_in_event_loop(client.send_grpc_message(input_text))
             # Poll for a response from the agent before rerunning
             if poll_for_updates(client, timeout=180):
                 st.rerun()
@@ -308,17 +322,50 @@ if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be
     else: # AI AGENT MODE
         with st.chat_message("assistant", avatar=assistant_img):
             with st.spinner("Thinking..."):
-                full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(prompt, sender="user"))
+                full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(input_text, sender="user"))
                 st.markdown(full_ai_response_string)
+            # The client's process_user_input method already adds the assistant's response to its chat_messages
             run_coroutine_in_event_loop(client.update_pinion_session())
-            # Handle if a next_intent was set by the AI's processing
+            
+            if var.get("ttsAudio"):
+                with st.spinner("Generating audio..."):
+                    try:
+                        audio_bytes = run_coroutine_in_event_loop(client.convert_text_to_audio(full_ai_response_string))
+                        if audio_bytes:
+                            # Auto-detect format from magic bytes (RIFF = WAV, OggS = OGG, default to MP3)
+                            audio_format = "audio/mp3"
+                            if audio_bytes.startswith(b"RIFF"):
+                                audio_format = "audio/wav"
+                            elif audio_bytes.startswith(b"OggS"):
+                                audio_format = "audio/ogg"
+                            st.audio(audio_bytes, format=audio_format, autoplay=True)
+                    except Exception as e:
+                        st.error(f"Failed to generate TTS audio: {e}")
+            
+            # Handle if a next_intent was set by the AI's processing. Next_intent turn handled internally
             if client.next_intent:
                 with st.chat_message("assistant", avatar=assistant_img):
                     with st.spinner("Thinking..."):
                         # Process the next_intent (user_input might be empty or the next_intent itself)
-                        full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(prompt, sender="user"))
-                        st.markdown(full_ai_response_string)
-                    run_coroutine_in_event_loop(client.update_pinion_session())       
+                        full_next_intent_response_string = run_coroutine_in_event_loop(client.process_user_input(user_input="", sender="user"))
+                        st.markdown(full_next_intent_response_string)
+                    run_coroutine_in_event_loop(client.update_pinion_session())
+
+                    if var.get("ttsAudio"):
+                        with st.spinner("Generating audio..."):
+                            try:
+                                audio_bytes = run_coroutine_in_event_loop(client.convert_text_to_audio(full_next_intent_response_string))
+                                if audio_bytes:
+                                    # Auto-detect format from magic bytes (RIFF = WAV, OggS = OGG, default to MP3)
+                                    audio_format = "audio/mp3"
+                                    if audio_bytes.startswith(b"RIFF"):
+                                        audio_format = "audio/wav"
+                                    elif audio_bytes.startswith(b"OggS"):
+                                        audio_format = "audio/ogg"
+                                    st.audio(audio_bytes, format=audio_format, autoplay=True)
+                            except Exception as e:
+                                st.error(f"Failed to generate TTS audio: {e}")
+                                      
         if client.transfer_requested:
             # Start gRPC client listener if agent transfer is requested
             if ensure_grpc_is_active(client):
