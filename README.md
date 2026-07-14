@@ -140,12 +140,12 @@ A Slack-based client is included to allow interacting with your PinionAI agents 
 
 ### Prerequisites
 
-1.  **Create a Slack App:** Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app.
-2.  **Tokens:**
-    - **Bot User OAuth Token (`SLACK_BOT_TOKEN`):** Found under "OAuth & Permissions". Needs `chat:write` and `files:read` scopes.
-    - **App-Level Token (`SLACK_APP_TOKEN`):** Found under "Basic Information". Needs `connections:write` scope and must be created with the `socket_mode` scope.
-3.  **Socket Mode:** Enable Socket Mode in your Slack app settings.
-4.  **Event Subscriptions:** Enable Events and subscribe to `message.channels` (and `message.groups` if needed).
+1. **Create a Slack App:** Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app.
+2. **Tokens:**
+   - **Bot User OAuth Token (`SLACK_BOT_TOKEN`)**: Found under "OAuth & Permissions". Needs `chat:write` and `files:read` scopes.
+   - **App-Level Token (`SLACK_APP_TOKEN`)**: Found under "Basic Information". Needs `connections:write` scope and must be created with the `socket_mode` scope.
+3. **Socket Mode:** Enable Socket Mode in your Slack app settings.
+4. **Event Subscriptions:** Enable Events and subscribe to `message.channels` (and `message.groups` if needed).
 
 ### Setup and Running
 
@@ -163,26 +163,46 @@ Set environment variables in your `.env` file:
 ```env
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
-host_url=https://microservice-72loomfx5q-uc.a.run.app
+host_url=https://api.pinionai.com
 # Optional: default agent
 client_id=<YOUR_CLIENT_ID_HERE>
 client_secret=<YOUR_CLIENT_SECRET_HERE>
 agent_id=<YOUR_AGENT_ID_HERE>
 ```
 
-Run the Slack bot:
+Run the Slack bot locally:
 
 ```bash
 python chat_slack.py
 ```
 
+### Production deployment on a VM
+
+For production, use the Slack-specific container image defined in `Dockerfile.slack`.
+
+```bash
+docker build -f Dockerfile.slack -t pinionai-slack:latest .
+```
+
+Then run it with a server-side `.env` file that contains the same values you would normally place in `deploy/prod-slack/env.yaml`.
+
+```bash
+docker run -d \
+  --name pinionai-slack \
+  --restart unless-stopped \
+  --env-file /path/to/.env \
+  pinionai-slack:latest
+```
+
+This approach works well on both Google Compute Engine and DigitalOcean droplets because the bot needs a long-running process rather than a scale-to-zero web workload.
+
 ### Features
 
-- **Message Interaction:** Just type in the channel to talk to the agent.
+- **Message Interaction:** Type in the channel to talk to the agent.
 - **AIA File Loading:** Upload a `.aia` file to the channel. The bot will load that agent for all subsequent messages in that channel.
 - **Private AIA Files:** If an AIA file is encrypted, the bot will ask for the `key_secret` in the next message.
 - **/end:** Use the `/end` command (as a regular message) to clear the current agent session.
-- **!end** Alternatively, if you don't want to configure a Slack command for /end, you can simply type !end as a regular message to clear your session.
+- **!end** Alternatively, if you do not want to configure a Slack command for `/end`, you can simply type `!end` as a regular message to clear your session.
 
 ## Microsoft Teams Deployment - Running the Teams bot: `chat_teams.py`
 

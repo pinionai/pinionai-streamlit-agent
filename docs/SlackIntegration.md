@@ -1,13 +1,13 @@
 # Slack Integration Guide - PinionAI Agent Runner
 
-This guide provides step-by-step instructions for setting up a Slack application, configuring the PinionAI Slack bot (`chat_slack.py`), and deploying it to various environments.
+This guide covers Slack app setup, local development, and production deployment of the Slack bot implemented in `chat_slack.py`.
 
 ## Table of Contents
 
 1. [Slack App Configuration](#1-slack-app-configuration)
 2. [Environment Setup](#2-environment-setup)
 3. [Local Deployment](#3-local-deployment)
-4. [Cloud Deployment (Google Cloud Run)](#4-cloud-deployment-google-cloud-run)
+4. [Production Deployment on a VM](#4-production-deployment-on-a-vm)
 5. [Usage Guide](#5-usage-guide)
 6. [Troubleshooting](#6-troubleshooting)
 
@@ -15,116 +15,175 @@ This guide provides step-by-step instructions for setting up a Slack application
 
 ## 1. Slack App Configuration
 
-To use the Slack integration, you must first create and configure a Slack App in the [Slack API Dashboard](https://api.slack.com/apps).
+To use the Slack integration, create and configure a Slack App in the [Slack API Dashboard](https://api.slack.com/apps).
 
 ### A. Create the App
 
 1. Click **Create New App** > **From scratch**.
-2. Name your app (e.g., "PinionAI Bot") and select your workspace.
+2. Name your app (for example, "PinionAI Bot") and select your workspace.
 
 ### B. Enable Socket Mode
 
 1. In the left sidebar, go to **Settings > Socket Mode**.
 2. Toggle **Enable Socket Mode** to **On**.
-3. You will be prompted to generate an **App-level token**.
-   - **Token Name:** `socket_token`
-   - **Scope:** `connections:write`
-4. **Copy this token** (starts with `xapp-`). This is your environment variable: `SLACK_APP_TOKEN`.
-5. **Interactivity & Shortcuts** set to `Yes`
-6. **Slash Commands** set to `Yes` (See F. below)
-7. **Enable Events** set to `Yes` (See D. below)
+3. Generate an **App-level token** with the `connections:write` scope.
+4. Copy this token as `SLACK_APP_TOKEN`.
+5. Enable **Interactivity & Shortcuts**, **Slash Commands**, and **Events**.
 
 ### C. Configure Bot Scopes
 
 1. Go to **Features > OAuth & Permissions**.
-2. Scroll down to **Scopes > Bot Token Scopes** and add:
-   - `chat:write` (Allows the bot to send messages)
-   - `files:read` (Allows the bot to process uploaded .aia files)
-   - `im:history` (Allows the bot to see messages in DMs)
-   - `channels:history` (Allows the bot to see messages in public channels)
-   - `groups:history` (Allows the bot to see messages in private channels)
-3. Scroll up and click **Install to Workspace**.
-4. **Copy the Bot User OAuth Token** (starts with `xoxb-`). This is your environment variable: `SLACK_BOT_TOKEN`.
+2. Add these bot scopes:
+   - `chat:write`
+   - `files:read`
+   - `im:history`
+   - `channels:history`
+   - `groups:history`
+3. Install the app to your workspace.
+4. Copy the **Bot User OAuth Token** as `SLACK_BOT_TOKEN`.
 
 ### D. Enable Events
 
 1. Go to **Features > Event Subscriptions**.
-2. Toggle **Enable Events** to **On**.
-3. Under **Subscribe to bot events**, add:
+2. Enable events.
+3. Subscribe to:
    - `message.channels`
    - `message.groups`
    - `message.im`
-4. Click **Save Changes**.
 
-### E. Enable the Messages Tab (Critical for Direct Messages)
+### E. Enable the Messages Tab
 
 1. Go to **Features > App Home**.
-2. Scroll to **Show Tabs**.
-3. Ensure **Messages Tab** is checked.
-4. Check **Allow users to send Slash commands and messages from the messages tab**.
+2. Ensure **Messages Tab** is enabled.
+3. Allow users to send slash commands and messages from the Messages tab.
 
-### F. Add Slash Commands (Recommended)
+### F. Add Slash Commands
 
 1. Go to **Features > Slash Commands**.
-2. Click **Create New Command**.
-   - **Command:** `/end`
-   - **Short Description:** Ends the PinionAI chat session.
-3. Click **Save**.
+2. Create `/end` with a short description such as "Ends the PinionAI chat session".
 
 ---
 
 ## 2. Environment Setup
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Use a local `.env` file for development and a server-side env file or Docker env file for production.
+
+Example local environment:
 
 ```env
-# PinionAI Credentials
 client_id=<YOUR_CLIENT_ID>
 client_secret=<YOUR_CLIENT_SECRET>
 agent_id=<YOUR_AGENT_ID>
-host_url=https://microservice-72loomfx5q-uc.a.run.app
+host_url=https://api.pinionai.com
 
-# Slack Credentials
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 ```
+
+For production, the same values can be placed in `deploy/prod-slack/env.yaml` for Cloud Run-style deployments, or converted into a `.env` file for a VM deployment.
 
 ---
 
 ## 3. Local Deployment
 
-1. **Activate your environment:**
+1. Activate your environment:
    ```bash
    source pinionai-streamlit/bin/activate
    ```
-2. **Install Dependencies:**
+2. Install dependencies:
    ```bash
    uv pip compile requirements.in -o requirements.txt
    uv pip sync requirements.txt
    ```
-3. **Run the Bot:**
+3. Run the bot:
    ```bash
    python chat_slack.py
    ```
 
 ---
 
-## 4. Cloud Deployment (Google Cloud Run)
+## 4. Production Deployment on a VM
 
-For production, you can deploy the bot as a containerized service.
+A VM is the recommended production hosting option for this Slack bot because it keeps a long-running Socket Mode connection alive.
 
-1. **Update `deploy/prod-slack/env.yaml`** with your production tokens.
-2. **Build and Push the Image:**
-   ```bash
-   gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/pinionai-slack-bot
-   ```
-3. **Deploy to Cloud Run:**
-   ```bash
-   gcloud run deploy pinionai-slack-bot
-       --image gcr.io/YOUR_PROJECT_ID/pinionai-slack-bot
-       --env-vars-file deploy/prod-slack/env.yaml
-       --no-allow-unauthenticated
-   ```
+### 4.1 Build the Slack-specific container image
+
+Use the Slack-specific Dockerfile:
+
+```bash
+docker build -f Dockerfile.slack -t pinionai-slack:latest .
+```
+
+### 4.2 Prepare the environment file
+
+On the VM, create a `.env` file with the same values you would normally put in `deploy/prod-slack/env.yaml`.
+
+Example:
+
+```env
+host_url=https://api.pinionai.com
+client_id=<YOUR_CLIENT_ID>
+client_secret=<YOUR_CLIENT_SECRET>
+agent_id=<YOUR_AGENT_ID>
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+```
+
+### 4.3 Run the container on the VM
+
+```bash
+docker run -d \
+  --name pinionai-slack \
+  --restart unless-stopped \
+  --env-file /path/to/.env \
+  pinionai-slack:latest
+```
+
+Check logs with:
+
+```bash
+docker logs -f pinionai-slack
+```
+
+### 4.4 Google Compute Engine VM
+
+1. Create a Debian 12 or Ubuntu 22.04 VM in GCP.
+2. Allow SSH and optionally HTTP/HTTPS traffic.
+3. Install Docker on the VM.
+4. Copy the repository to the server.
+5. Build the image using `Dockerfile.slack`.
+6. Start the container as shown above.
+
+Example install steps on Debian/Ubuntu:
+
+```bash
+sudo apt update
+sudo apt install -y docker.io
+sudo systemctl enable docker
+sudo systemctl start docker
+sudo usermod -aG docker "$USER"
+```
+
+### 4.5 DigitalOcean Droplet
+
+1. Create a Debian 12 or Ubuntu 22.04 droplet.
+2. SSH into the droplet.
+3. Install Docker.
+4. Clone the repository and build the Slack image.
+5. Run the container with your `.env` file.
+
+Example:
+
+```bash
+sudo apt update
+sudo apt install -y docker.io
+sudo systemctl enable docker
+sudo systemctl start docker
+```
+
+### 4.6 Optional systemd service
+
+If you prefer process management over Docker, run the bot directly from a Python virtual environment with a systemd unit. This is a good fit for long-running production use.
 
 ---
 
@@ -132,33 +191,33 @@ For production, you can deploy the bot as a containerized service.
 
 ### Chatting
 
-- **Direct Message:** Simply message the bot in its "Messages" tab.
-- **Channels:** Invite the bot to a channel (`/invite @BotName`) and type a message.
+- **Direct Message:** Send a message to the bot in its Messages tab.
+- **Channels:** Invite the bot to a channel and type a message.
 
 ### Dynamic Agent Loading
 
-You can change the active agent for a channel at any time by **uploading a `.aia` file**.
+You can change the active agent for a channel by uploading a `.aia` file.
 
 1. Upload the `.aia` file to the chat.
-2. The bot will automatically switch to that agent for all future messages in that channel.
-3. **Private Agents:** If the file is encrypted, the bot will ask for the `key_secret`. Reply with the secret key to unlock the agent.
+2. The bot will switch to that agent for subsequent messages in that channel.
+3. If the file is private, the bot will ask for the `key_secret`.
 
 ### Cleaning Slack Formatting
 
-The bot automatically cleans Slack's specific formatting. If you type an email address or link, it strips wrappers like `<mailto:alan@example.com|alan@example.com>` into plain text before passing it to the AI.
+The bot removes Slack formatting wrappers such as `<mailto:...>` before sending text to the AI.
 
 ### Ending a Session
 
-To clear the chat history and reset the agent:
+To clear the active session:
 
-- Type the Slash command: `/end`
-- OR type the message: `!end`
+- Use `/end`, or
+- Send `!end` as a message.
 
 ---
 
 ## 6. Troubleshooting
 
-- **"Sending messages to this app has been turned off"**: Go to **App Home** and enable the **Messages Tab** and user messaging checkbox.
-- **Bot doesn't reply in channels**: Ensure the bot has been invited to the channel (`/invite @BotName`).
-- **Bot doesn't see messages**: Check **Event Subscriptions** and ensure `message.channels` is added and changes are saved.
-- **SyntaxError or ModuleNotFoundError**: Ensure you have activated your virtual environment and installed `httpx`, `slack-bolt`, and `python-dotenv`.
+- **"Sending messages to this app has been turned off"**: Enable the Messages tab and user messaging in App Home.
+- **Bot does not reply in channels**: Ensure the bot is invited to the channel and that `message.channels` is subscribed.
+- **Bot does not see messages**: Check event subscriptions and app scopes.
+- **Module import errors**: Make sure the virtual environment is activated and that dependencies are installed.

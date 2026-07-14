@@ -72,7 +72,6 @@ A powerful feature is the ability to embed agent variables directly into your fu
 2.  Ensure an account and agent are selected.
 3.  Expand the "New Tool" section.
 4.  Fill out the form with the following details:
-
     - **Tool Name**: A tool named `get_stock_data` to match the function name in pinionai_extensions.py file.
     - **Status**: A toggle to enable or disable the tool.
     - **Agent(s)**: A multi-select field to associate the tool with one or more AI Agents. Only associated agents can use this tool.

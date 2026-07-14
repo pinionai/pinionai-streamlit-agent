@@ -166,7 +166,7 @@ agent_id = '<YOUR_AGENT_ID_HERE>'
 host_url = 'https://microservice-72loomfx5q-uc.a.run.app' # '<PINIONAI_API_HOST_URL_HERE>'
 ```
 
-**OR**
+**OR USE ENV YAML**
 
 - For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need client_id, client_secret or a specific agent_id.
 
