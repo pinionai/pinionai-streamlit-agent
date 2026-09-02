@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pinionai-chat"
-version = "0.3.1"
+version = "0.3.3"
 description = "PinionAI Client application utilizing Streamlit Framework."
 requires-python = ">=3.11,<3.14"
 authors = [
@@ -21,7 +21,7 @@ dependencies = [
     # Core Application & Framework
     "streamlit",
     "Pillow",
-    "pinionai[all]",  # PinionAI Client Core + all optional dependencies (line 36-46)
+    "pinionai[all]",  # PinionAI Client Core + all optional dependencies (line 43-53)
     "httpx",
     "python-dotenv",
     "aiohttp",

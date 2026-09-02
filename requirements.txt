@@ -2,11 +2,11 @@
 #    uv pip compile requirements.in -o requirements.txt
 -e .
     # via -r requirements.in
-aiofile==3.11.1
+aiofile==3.12.3
     # via py-key-value-aio
 aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.14.1
+aiohttp==3.14.3
     # via
     #   -r requirements.in
     #   aiohttp-retry
@@ -19,21 +19,23 @@ aiosignal==1.4.0
     # via aiohttp
 altair==6.2.2
     # via streamlit
-annotated-types==0.7.0
+annotated-types==0.8.0
     # via pydantic
-anthropic==0.116.0
+anthropic==1.3.0
     # via pinionai
 anyio==4.14.2
     # via
     #   anthropic
     #   google-genai
     #   httpx
+    #   httpx2
     #   mcp
     #   openai
     #   py-key-value-aio
     #   sse-starlette
     #   starlette
     #   streamlit
+    #   telnyx
     #   watchfiles
 attrs==26.1.0
     # via
@@ -42,14 +44,12 @@ attrs==26.1.0
     #   jsonschema
     #   jsonschema-path
     #   referencing
-authlib==1.7.2
+authlib==1.8.0
     # via fastmcp-slim
 azure-core==1.41.0
     # via msrest
 beartype==0.22.9
     # via py-key-value-aio
-blinker==1.9.0
-    # via streamlit
 botbuilder-core==4.17.1
     # via
     #   -r requirements.in
@@ -72,33 +72,31 @@ botframework-connector==4.17.1
     #   botframework-streaming
 botframework-streaming==4.17.1
     # via botbuilder-core
-boto3==1.43.46
+boto3==1.43.86
     # via pinionai
-botocore==1.43.46
+botocore==1.43.86
     # via
     #   boto3
     #   s3transfer
-cachetools==7.1.4
-    # via
-    #   py-key-value-aio
-    #   streamlit
-caio==0.9.25
+cachetools==7.1.8
+    # via py-key-value-aio
+caio==0.12.2
     # via aiofile
-certifi==2026.6.17
+certifi==2026.7.22
     # via
     #   httpcore
     #   httpx
     #   msrest
     #   requests
-cffi==2.1.0
+cffi==2.1.1
     # via cryptography
-charset-normalizer==3.4.9
+charset-normalizer==3.5.1
     # via requests
-click==8.4.2
+click==8.5.0
     # via
     #   streamlit
     #   uvicorn
-cryptography==49.0.0
+cryptography==50.0.1
     # via
     #   authlib
     #   google-auth
@@ -107,13 +105,12 @@ cryptography==49.0.0
     #   pinionai
     #   pyjwt
     #   sendgrid
-cyclopts==4.21.0
+cyclopts==4.23.3
     # via fastmcp-slim
 distro==1.9.0
     # via
-    #   anthropic
     #   google-genai
-    #   openai
+    #   telnyx
 dnspython==2.8.0
     # via email-validator
 docstring-parser==0.18.0
@@ -124,110 +121,120 @@ email-validator==2.3.0
     # via pydantic
 exceptiongroup==1.3.1
     # via fastmcp-slim
-fastmcp==3.4.4
+fastmcp==4.0.1
     # via pinionai
-fastmcp-slim==3.4.4
+fastmcp-slim==4.0.1
     # via fastmcp
+ffmpeg-python==0.2.0
+    # via pinionai
 frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
+future==1.0.0
+    # via ffmpeg-python
 geographiclib==2.1
     # via geopy
 geopy==2.5.0
     # via pinionai-chat
-gitdb==4.0.12
-    # via gitpython
-gitpython==3.1.51
-    # via streamlit
-google-api-core==2.31.0
+google-api-core==2.34.0
     # via
     #   google-cloud-appengine-logging
     #   google-cloud-core
     #   google-cloud-logging
+    #   google-cloud-speech
     #   google-cloud-storage
     #   pinionai
-google-auth==2.55.2
+google-auth==2.57.0
     # via
     #   google-api-core
     #   google-cloud-appengine-logging
     #   google-cloud-core
     #   google-cloud-logging
+    #   google-cloud-speech
     #   google-cloud-storage
     #   google-genai
     #   pinionai
 google-cloud-appengine-logging==1.10.0
     # via google-cloud-logging
-google-cloud-audit-log==0.6.0
+google-cloud-audit-log==0.6.2
     # via google-cloud-logging
-google-cloud-core==2.6.0
+google-cloud-core==2.7.0
     # via
     #   google-cloud-logging
     #   google-cloud-storage
-google-cloud-logging==3.16.1
+google-cloud-logging==3.16.3
     # via pinionai-chat
-google-cloud-storage==3.12.1
+google-cloud-speech==2.40.0
+    # via pinionai
+google-cloud-storage==3.13.1
     # via pinionai
 google-crc32c==1.8.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==2.11.0
+google-genai==2.21.0
     # via pinionai
-google-resumable-media==2.10.0
+google-resumable-media==2.10.2
     # via google-cloud-storage
-googleapis-common-protos==1.75.0
+googleapis-common-protos==1.75.2
     # via
     #   google-api-core
     #   google-cloud-audit-log
     #   grpc-google-iam-v1
     #   grpcio-status
-griffelib==2.1.0
+griffelib==2.2.0
     # via fastmcp-slim
-grpc-google-iam-v1==0.14.4
+grpc-google-iam-v1==0.14.5
     # via google-cloud-logging
-grpcio==1.82.1
+grpcio==1.83.1
     # via
     #   google-api-core
     #   google-cloud-appengine-logging
     #   google-cloud-logging
+    #   google-cloud-speech
     #   googleapis-common-protos
     #   grpc-google-iam-v1
     #   grpcio-status
     #   pinionai
-grpcio-status==1.82.1
+grpcio-status==1.83.1
     # via google-api-core
 h11==0.16.0
     # via
     #   httpcore
+    #   httpcore2
     #   uvicorn
-h2==4.3.0
+h2==4.4.1
     # via httpx
 hpack==4.2.0
     # via h2
 httpcore==1.0.9
     # via httpx
+httpcore2==2.12.0
+    # via httpx2
 httptools==0.8.0
     # via streamlit
 httpx==0.28.1
     # via
     #   -r requirements.in
-    #   anthropic
-    #   fastmcp-slim
     #   google-genai
-    #   mcp
-    #   openai
     #   pinionai
     #   pinionai-chat
-httpx-sse==0.4.3
-    # via mcp
+    #   telnyx
+httpx2==2.12.0
+    # via
+    #   anthropic
+    #   fastmcp-slim
+    #   mcp
+    #   openai
 hyperframe==6.1.0
     # via h2
-idna==3.18
+idna==3.19
     # via
     #   anyio
     #   email-validator
     #   httpx
+    #   httpx2
     #   requests
     #   yarl
 isodate==0.7.2
@@ -238,7 +245,7 @@ jaraco-classes==3.4.0
     # via keyring
 jaraco-context==6.1.2
     # via keyring
-jaraco-functools==4.5.0
+jaraco-functools==4.6.0
     # via keyring
 jinja2==3.1.6
     # via
@@ -253,7 +260,7 @@ jmespath==1.1.0
     # via
     #   boto3
     #   botocore
-joserfc==1.7.3
+joserfc==1.7.5
     # via
     #   authlib
     #   fastmcp-slim
@@ -273,9 +280,9 @@ jsonschema-specifications==2025.9.1
     # via jsonschema
 keyring==25.7.0
     # via py-key-value-aio
-levenshtein==0.27.3
+levenshtein==0.27.4
     # via python-levenshtein
-markdown==3.10.2
+markdown==3.10.3
     # via pinionai
 markdown-it-py==4.2.0
     # via rich
@@ -283,8 +290,12 @@ markupsafe==3.0.3
     # via
     #   jinja2
     #   werkzeug
-mcp==1.28.1
+mcp==2.1.1
     # via fastmcp-slim
+mcp-types==2.1.1
+    # via
+    #   fastmcp-slim
+    #   mcp
 mdurl==0.1.2
     # via markdown-it-py
 mini-racer==0.14.1
@@ -293,7 +304,7 @@ more-itertools==11.1.0
     # via
     #   jaraco-classes
     #   jaraco-functools
-msal==1.37.0
+msal==1.38.0
     # via botframework-connector
 msrest==0.7.1
     # via
@@ -303,29 +314,30 @@ multidict==6.7.1
     # via
     #   aiohttp
     #   yarl
-narwhals==2.23.0
+narwhals==2.25.0
     # via altair
-numpy==2.5.1
+numpy==2.5.2
     # via
     #   pandas
     #   pydeck
     #   streamlit
 oauthlib==3.3.1
     # via requests-oauthlib
-openai==2.45.0
+openai==3.7.0
     # via pinionai
 openapi-pydantic==0.5.1
     # via fastmcp-slim
-opentelemetry-api==1.43.0
+opentelemetry-api==1.44.0
     # via
     #   fastmcp-slim
     #   google-cloud-logging
-packaging==26.2
+    #   mcp
+packaging==26.3
     # via
     #   altair
     #   fastmcp-slim
     #   streamlit
-pandas==3.0.3
+pandas==3.0.5
     # via
     #   pinionai
     #   streamlit
@@ -335,42 +347,44 @@ pillow==12.3.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.3.1
+pinionai==0.3.5
     # via pinionai-chat
-platformdirs==4.10.0
+platformdirs==4.11.7
     # via fastmcp-slim
 propcache==0.5.2
     # via
     #   aiohttp
     #   yarl
-proto-plus==1.28.1
+proto-plus==1.28.4
     # via
     #   google-api-core
     #   google-cloud-appengine-logging
     #   google-cloud-logging
-protobuf==7.35.1
+    #   google-cloud-speech
+protobuf==7.36.1
     # via
     #   google-api-core
     #   google-cloud-appengine-logging
     #   google-cloud-audit-log
     #   google-cloud-logging
+    #   google-cloud-speech
     #   googleapis-common-protos
     #   grpc-google-iam-v1
     #   grpcio-status
     #   pinionai
     #   proto-plus
     #   streamlit
-psycopg==3.3.4
+psycopg==3.3.5
     # via
     #   -r requirements.in
     #   pinionai
-psycopg-binary==3.3.4
+psycopg-binary==3.3.5
     # via psycopg
 psycopg-pool==3.3.1
     # via psycopg
 py-key-value-aio==0.4.5
     # via fastmcp-slim
-pyarrow==25.0.0
+pyarrow==25.0.1
     # via streamlit
 pyasn1==0.6.4
     # via pyasn1-modules
@@ -378,24 +392,24 @@ pyasn1-modules==0.4.2
     # via google-auth
 pycparser==3.0
     # via cffi
-pydantic==2.13.4
+pydantic==2.13.5
     # via
     #   anthropic
     #   fastmcp-slim
     #   google-genai
     #   mcp
+    #   mcp-types
     #   openai
     #   openapi-pydantic
     #   pydantic-settings
-pydantic-core==2.46.4
+    #   telnyx
+pydantic-core==2.46.5
     # via pydantic
-pydantic-settings==2.14.2
-    # via
-    #   fastmcp-slim
-    #   mcp
+pydantic-settings==2.15.0
+    # via fastmcp-slim
 pydeck==0.9.3
     # via streamlit
-pygments==2.20.0
+pygments==2.21.0
     # via
     #   rich
     #   rich-rst
@@ -411,7 +425,7 @@ python-dateutil==2.9.0.post0
     # via
     #   botocore
     #   pandas
-python-dotenv==1.2.2
+python-dotenv==1.2.3
     # via
     #   -r requirements.in
     #   fastmcp-slim
@@ -419,7 +433,7 @@ python-dotenv==1.2.2
     #   pydantic-settings
 python-http-client==3.3.7
     # via sendgrid
-python-levenshtein==0.27.3
+python-levenshtein==0.27.4
     # via pinionai
 python-multipart==0.0.32
     # via
@@ -430,7 +444,7 @@ pyyaml==6.0.3
     # via
     #   fastmcp-slim
     #   jsonschema-path
-rapidfuzz==3.14.5
+rapidfuzz==3.14.6
     # via levenshtein
 referencing==0.37.0
     # via
@@ -462,44 +476,45 @@ rpds-py==2026.6.3
     # via
     #   jsonschema
     #   referencing
-s3transfer==0.19.1
+s3transfer==0.19.2
     # via boto3
 sendgrid==6.12.5
     # via pinionai
 six==1.17.0
     # via python-dateutil
-slack-bolt==1.29.0
+slack-bolt==1.30.0
     # via
     #   -r requirements.in
     #   pinionai-chat
-slack-sdk==3.43.0
+slack-sdk==3.44.0
     # via slack-bolt
-smmap==5.0.3
-    # via gitdb
 sniffio==1.3.1
     # via
     #   anthropic
     #   google-genai
     #   openai
-sse-starlette==3.4.5
+    #   telnyx
+sse-starlette==3.4.8
     # via mcp
-starlette==1.3.1
+starlette==1.6.0
     # via
     #   fastmcp-slim
     #   mcp
     #   sse-starlette
     #   streamlit
-streamlit==1.59.1
+streamlit==1.63.0
     # via pinionai-chat
+telnyx==4.178.0
+    # via pinionai
 tenacity==9.1.4
-    # via
-    #   google-genai
-    #   streamlit
+    # via google-genai
 toml==0.10.2
     # via streamlit
-tqdm==4.68.4
-    # via openai
-twilio==9.10.9
+truststore==0.10.4
+    # via
+    #   httpcore2
+    #   httpx2
+twilio==9.11.0
     # via pinionai
 typing-extensions==4.16.0
     # via
@@ -510,6 +525,7 @@ typing-extensions==4.16.0
     #   google-genai
     #   grpcio
     #   mcp
+    #   mcp-types
     #   openai
     #   opentelemetry-api
     #   psycopg-pool
@@ -517,27 +533,28 @@ typing-extensions==4.16.0
     #   pydantic
     #   pydantic-core
     #   streamlit
+    #   telnyx
     #   typing-inspection
-typing-inspection==0.4.2
+typing-inspection==0.4.4
     # via
     #   mcp
     #   pydantic
     #   pydantic-settings
-uncalled-for==0.3.2
+uncalled-for==0.4.0
     # via fastmcp-slim
 urllib3==2.7.0
     # via
     #   botbuilder-schema
     #   botocore
     #   requests
-uvicorn==0.51.0
+uvicorn==0.52.4
     # via
     #   fastmcp-slim
     #   mcp
     #   streamlit
 watchfiles==1.2.0
     # via fastmcp-slim
-websockets==16.1
+websockets==16.1.1
     # via
     #   fastmcp-slim
     #   google-genai
@@ -547,7 +564,7 @@ werkzeug==3.1.8
     # via sendgrid
 xmltodict==1.0.4
     # via pinionai
-yarl==1.24.2
+yarl==1.24.5
     # via
     #   aiohttp
     #   botbuilder-integration-aiohttp

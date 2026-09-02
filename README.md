@@ -19,30 +19,85 @@ To run the Streamlit Application locally (on cloud shell), we need to perform th
 
 If desired, edit the `pyproject.toml`, before generating the requirements.txt and pip install. By default, `pinionai[all]` is installed, but there are additional options or changes you can make.
 
+## PinionAI Python Library
+
+This is the official Python client library for the PinionAI platform. It provides a convenient, asynchronous way to interact with PinionAI agents, manage sessions, and use its various features including AI interactions and gRPC messaging.
+
+**PinionAI Python Package:**
+[PyPi Python](https://pypi.org/project/pinionai/)
+
+## Installation
+
+### From PyPI
+
+This package is available on PyPI and can be installed with `pip` or `uv`. We recommend `uv` for its speed.
+
+**With `uv`**
+
+If you don't have `uv`, you can install it from astral.sh.
+
+```bash
+# On macOS and Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+#OR
+brew install uv
+```
+
+```bash
+# On Windows
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Once `uv` is installed, you can install the `pinionai` package from PyPI:
+
+```bash
+uv pip install pinionai
+```
+
+**With `pip`**
+
+If you prefer to use pip, you can still install the package with:
+
+```bash
+pip install pinionai
+```
+
 ### Optional Features
 
-The client includes optional features that require extra dependencies. You can install them as needed based on the services you intend to use.
+The base install covers the common client and session workflow. Optional integrations are grouped into extras so you can keep the install lean and only pull in the packages you need.
 
 - gcp: Google Cloud Storage support (google-cloud-storage)
 - aws: AWS S3 support (boto3)
 - openai: Support for OpenAI models (openai)
 - anthropic: Support for Anthropic models (anthropic)
 - javascript: Support for running JavaScript snippets (mini-racer)
-- sendgrid: Support for running sendgrid delivery (twiliio service)
-- twilio: Support for sms delivery
+- sendgrid: Support for running SendGrid delivery
+- twilio: Support for SMS delivery
+- mcp: FastMCP tool integration (fastmcp)
+- data: Tabular and CSV helpers (pandas)
+- postgres: PostgreSQL connector support (psycopg)
+- google: Google Gemini / Vertex AI support (google-genai)
 
-To install one or more optional features, specify them in brackets. For example, to get support for GCP and AWS:
+To install one or more optional features, specify them in brackets. For example, to get support for GCP, AWS, and Google AI:
 
 ```bash
-pip install pinionai[gcp,aws]
+pip install "pinionai[gcp,aws,google]"
 ```
 
 To install all optional features at once, use the `all` extra:
 
 ```bash
-pip install pinionai[all]
+pip install "pinionai[all]"
 ```
 
+**Options include:**
+
+- dev = [
+  "build",
+  "twine",
+  "ruff",
+  "grpcio-tools",
+  ]
 - gcp = ["google-cloud-storage"]
 - aws = ["boto3"]
 - openai = ["openai"]
@@ -50,8 +105,12 @@ pip install pinionai[all]
 - javascript = ["mini-racer"]
 - sendgrid = ["sendgrid"]
 - twilio = ["twilio"]
+- mcp = ["fastmcp"]
+- data = ["pandas"]
+- postgres = ["psycopg[binary,pool]"]
+- google = ["google-genai>=1.72.0"]
 - all = [
-  "pinionai[gcp,aws,openai,anthropic,javascript,twilio,sendgrid]"
+  "pinionai[gcp,aws,openai,anthropic,javascript,twilio,sendgrid,mcp,data,postgres,google]"
   ]
 
 2. Setup the Python virtual environment and install the dependencies:
@@ -137,6 +196,15 @@ python chat_cli.py
 A Slack-based client is included to allow interacting with your PinionAI agents directly from a Slack channel. It uses `slack_bolt` with Socket Mode for easy setup without needing a public endpoint.
 
 [Slack Integration Document](docs/SlackIntegration.md)
+
+For Slack Marketplace / App Directory submission, use the new guides:
+
+- [Slack Marketplace Distribution Guide](docs/SlackMarketplaceDistribution.md)
+- [Slack Marketplace Submission Checklist](docs/SlackMarketplaceChecklist.md)
+- [Slack Marketplace Deployment on GCP](docs/SlackMarketplace_Deployment_GCP_e2_micro.md)
+- [Slack Marketplace Deployment on DigitalOcean](docs/SlackMarketplace_Deployment_DigitalOcean.md)
+
+> The Socket Mode setup above is appropriate for private or internal Slack bots. Marketplace submission requires an HTTP-based public deployment with public distribution enabled.
 
 ### Prerequisites
 
@@ -408,7 +476,7 @@ export PROJECT_ID=$(gcloud config get-value project)
 export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
 ```
 
-### Step 2: Create a Dedicated Service Account and Grant Necessary IAM Roles
+### Step 2: Create a Dedicated Service Account and Grant Necessary IAM Roles (only do once)
 
 - NOTE: only do step 2 once
 
@@ -459,6 +527,8 @@ export PROJECT_ID=$(gcloud config get-value project)
 export REGION="us-central1" # Or your preferred region
 export REPOSITORY="pinionai-chat-repo"
 export IMAGE_NAME="pinionai-chat"
+export SERVICE_ACCOUNT_NAME="pinionai-client-runner"
+export SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
 ### 2. Enable Required APIs (only need to do this once)
