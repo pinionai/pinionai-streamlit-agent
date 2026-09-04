@@ -289,7 +289,37 @@ sudo systemctl status pinionai-slack
 
 ---
 
-## 10. Monitor the bot and logs
+## 10. Update the VM from GitHub
+
+Run these steps after pushing a new version to the GitHub repository. Connect to the VM over SSH first, then run the commands from the project directory:
+
+```bash
+cd /home/$USER/pinionai-streamlit-agent
+git status
+git pull origin main
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+sudo systemctl restart pinionai-slack
+sudo systemctl status pinionai-slack --no-pager
+```
+
+The `.env` file is not tracked by Git, so it will remain on the VM while the application code is updated. If `git status` reports local changes, review them before pulling; do not overwrite them unless you intend to discard those changes.
+
+After restarting, watch the logs to confirm that the new version connects successfully:
+
+```bash
+sudo journalctl -u pinionai-slack -f
+```
+
+If the update changes the systemd unit file, reload systemd before restarting:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart pinionai-slack
+```
+
+## 11. Monitor the bot and logs
 
 Use journalctl to watch the service logs in real time.
 
@@ -307,7 +337,7 @@ If the service fails to start, inspect the logs for configuration or dependency 
 
 ---
 
-## 11. Network considerations
+## 12. Network considerations
 
 - Slack Socket Mode only requires outbound HTTPS traffic.
 - You do not need to open inbound ports for the Slack connection itself.
@@ -315,7 +345,7 @@ If the service fails to start, inspect the logs for configuration or dependency 
 
 ---
 
-## 12. Commands summary
+## 13. Commands summary
 
 ```bash
 sudo apt update
@@ -336,7 +366,7 @@ Then create the `systemd` service and enable it.
 
 ---
 
-## 13. Optional: using browser SSH
+## 14. Optional: using browser SSH
 
 If you prefer not to use local SSH keys, the Google Cloud Console browser SSH option is a good alternative.
 
@@ -346,7 +376,7 @@ If you prefer not to use local SSH keys, the Google Cloud Console browser SSH op
 
 ---
 
-## 14. Important notes for `e2-micro`
+## 15. Important notes for `e2-micro`
 
 - Keep the VM dedicated to the Slack bot for best stability.
 - Do not run resource-heavy processes at the same time.

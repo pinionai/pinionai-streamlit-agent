@@ -319,7 +319,38 @@ sudo systemctl status pinionai-slack-marketplace
 
 ---
 
-## 12. Validate the deployment
+## 12. Update the VM from GitHub
+
+Run these steps after pushing a new version to the GitHub repository. Connect to the VM over SSH first, then run the commands from the project directory:
+
+```bash
+cd /home/$USER/pinionai-streamlit-agent
+git status
+git pull origin main
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+sudo systemctl restart pinionai-slack-marketplace
+sudo systemctl status pinionai-slack-marketplace --no-pager
+```
+
+The `.env` file is not tracked by Git, so it will remain on the VM while the application code is updated. If `git status` reports local changes, review them before pulling; do not overwrite them unless you intend to discard those changes.
+
+After restarting, check the service logs and confirm that the public endpoint still responds:
+
+```bash
+sudo journalctl -u pinionai-slack-marketplace -f
+curl https://slack.yourdomain.com/slack/health
+```
+
+If the update changes the systemd unit file, reload systemd before restarting:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart pinionai-slack-marketplace
+```
+
+## 13. Validate the deployment
 
 Before submitting the app to the Slack Marketplace, confirm that:
 
@@ -338,6 +369,6 @@ If Slack still reports submission errors, re-check:
 
 ---
 
-## 13. Summary
+## 14. Summary
 
 For a Slack Marketplace submission, the deployment must be public and HTTP-based. The VM setup is similar to the existing GCP e2-micro guide, but the important difference is that your app must expose a public HTTPS endpoint for Slack events and interactivity.

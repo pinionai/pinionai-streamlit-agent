@@ -2,7 +2,12 @@
 
 ### 1. Build Stage ###
 # Use a slim Python image as the builder
-FROM python:3.13-slim as builder
+FROM python:3.13-slim AS builder
+
+# Patch packages inherited from the base image.
+# RUN apt-get update && \
+#     apt-get upgrade -y && \
+#     rm -rf /var/lib/apt/lists/*
 
 # Set environment variables: allow writing bytecode (.pyc) files during build
 ENV PYTHONDONTWRITEBYTECODE 0
@@ -32,7 +37,12 @@ RUN uv pip install --no-cache -r requirements.txt
 RUN python -m compileall /app/.venv
 
 ### 2. Final Stage ###
-FROM python:3.13-slim as final
+FROM python:3.13-slim AS final
+
+# Patch packages inherited from the base image.
+# RUN apt-get update && \
+#     apt-get upgrade -y && \
+#     rm -rf /var/lib/apt/lists/*
 
 # Ensure bytecode (.pyc files) is utilized at runtime for near-instant startup
 ENV PYTHONDONTWRITEBYTECODE 0
