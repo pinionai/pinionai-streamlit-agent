@@ -294,7 +294,7 @@ display_chat_messages(client.get_chat_messages_for_display(), user_img, assistan
 input_text = None
 
 if var.get("sttAudio"):
-    if prompt := st.chat_input(var["agentStart"], accept_audio=True):
+    if prompt := st.chat_input(var["agentStart"], accept_audio=True, audio_sample_rate=None):
         if prompt.text:
             input_text = prompt.text
         if prompt.audio:
