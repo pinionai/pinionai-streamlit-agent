@@ -21,7 +21,7 @@ altair==6.3.0
     # via streamlit
 annotated-types==0.8.0
     # via pydantic
-anthropic==1.7.0
+anthropic==1.8.0
     # via pinionai
 anyio==4.15.1
     # via
@@ -72,9 +72,9 @@ botframework-connector==4.17.1
     #   botframework-streaming
 botframework-streaming==4.17.1
     # via botbuilder-core
-boto3==1.43.98
+boto3==1.43.101
     # via pinionai
-botocore==1.43.98
+botocore==1.43.101
     # via
     #   boto3
     #   s3transfer
@@ -105,7 +105,7 @@ cryptography==50.0.1
     #   pinionai
     #   pyjwt
     #   sendgrid
-cyclopts==4.25.3
+cyclopts==5.0.0
     # via fastmcp-slim
 distro==1.9.0
     # via
@@ -121,9 +121,9 @@ email-validator==2.3.0
     # via pydantic
 exceptiongroup==1.3.1
     # via fastmcp-slim
-fastmcp==4.0.5
+fastmcp==4.0.8
     # via pinionai
-fastmcp-slim==4.0.5
+fastmcp-slim==4.0.8
     # via fastmcp
 ffmpeg-python==0.2.0
     # via pinionai
@@ -173,7 +173,7 @@ google-crc32c==1.8.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==2.24.0
+google-genai==2.25.0
     # via pinionai
 google-resumable-media==2.10.2
     # via google-cloud-storage
@@ -210,7 +210,7 @@ hpack==4.2.0
     # via h2
 httpcore==1.0.9
     # via httpx
-httpcore2==2.13.0
+httpcore2==2.13.1
     # via httpx2
 httptools==0.8.0
     # via streamlit
@@ -221,7 +221,7 @@ httpx==0.28.1
     #   pinionai
     #   pinionai-chat
     #   telnyx
-httpx2==2.13.0
+httpx2==2.13.1
     # via
     #   anthropic
     #   fastmcp-slim
@@ -310,7 +310,7 @@ msrest==0.7.1
     # via
     #   botbuilder-schema
     #   botframework-connector
-multidict==6.9.0
+multidict==6.9.1
     # via
     #   aiohttp
     #   yarl
@@ -323,7 +323,7 @@ numpy==2.5.3
     #   streamlit
 oauthlib==3.3.1
     # via requests-oauthlib
-openai==3.16.2
+openai==3.19.2
     # via pinionai
 openapi-pydantic==0.5.1
     # via fastmcp-slim
@@ -348,9 +348,9 @@ pillow==12.3.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.4.0
+pinionai==0.4.1
     # via pinionai-chat
-platformdirs==4.11.11
+platformdirs==4.11.12
     # via fastmcp-slim
 propcache==0.5.4
     # via
@@ -381,7 +381,7 @@ psycopg==3.3.6
     #   pinionai
 psycopg-binary==3.3.6
     # via psycopg
-psycopg-pool==3.3.2
+psycopg-pool==3.3.3
     # via psycopg
 py-key-value-aio==0.4.6
     # via fastmcp-slim
@@ -414,7 +414,7 @@ pygments==2.21.0
     # via
     #   rich
     #   rich-rst
-pyjwt==2.14.0
+pyjwt==2.15.0
     # via
     #   botframework-connector
     #   mcp
@@ -497,7 +497,7 @@ sniffio==1.3.1
     #   telnyx
 sse-starlette==3.4.11
     # via mcp
-starlette==1.6.0
+starlette==1.7.0
     # via
     #   fastmcp-slim
     #   mcp
@@ -505,7 +505,7 @@ starlette==1.6.0
     #   streamlit
 streamlit==1.64.0
     # via pinionai-chat
-telnyx==4.179.0
+telnyx==4.181.0
     # via pinionai
 tenacity==9.1.4
     # via google-genai
@@ -554,7 +554,7 @@ uvicorn==0.53.0
     #   fastmcp-slim
     #   mcp
     #   streamlit
-watchfiles==1.2.0
+watchfiles==1.3.0
     # via fastmcp-slim
 websockets==16.1.1
     # via
