@@ -17,6 +17,7 @@ import threading
 import getpass
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+from agent_selection import get_available_agents, resolve_agent
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -88,6 +89,53 @@ def cleanup_client(client: AsyncPinionAIClient):
             run_coroutine_in_event_loop(client._http_session.aclose())
     except Exception as e:
         print(f"Warning: Error closing HTTP session: {e}")
+
+def select_agent_interactively(client: AsyncPinionAIClient, default_agent_id: str):
+    """Offer account agents in the terminal, retaining the configured agent by default."""
+    try:
+        agents = run_coroutine_in_event_loop(get_available_agents(client))
+    except Exception as e:
+        print(f"Could not list available agents: {e}")
+        return client
+    if not agents:
+        print("No agents were returned for this account.")
+        return client
+
+    default_agent = resolve_agent(agents, default_agent_id) if default_agent_id else None
+    if default_agent is None:
+        default_agent = agents[0]
+    print("Available agents:")
+    for index, agent in enumerate(agents, start=1):
+        default_marker = " (default)" if agent["uid"] == default_agent["uid"] else ""
+        print(f"  {index}. {agent['agent_name']} [{agent['uid']}]{default_marker}")
+
+    selection = input("Select by number, name, or UID (Enter keeps default): ").strip()
+    if not selection:
+        selected_agent = default_agent
+    elif selection.isdigit() and 1 <= int(selection) <= len(agents):
+        selected_agent = agents[int(selection) - 1]
+    else:
+        selected_agent = resolve_agent(agents, selection)
+        if selected_agent is None:
+            print("Selection not found; keeping the default agent.")
+            selected_agent = default_agent
+
+    if selected_agent["uid"] == getattr(client, "_agent_id", default_agent_id):
+        return client
+
+    try:
+        new_client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
+            agent_id=selected_agent["uid"],
+            host_url=os.environ.get("host_url"),
+            client_id=os.environ.get("client_id"),
+            client_secret=os.environ.get("client_secret"),
+            version=os.environ.get("version", None),
+        ))
+        cleanup_client(client)
+        return new_client
+    except Exception as e:
+        print(f"Failed to load selected agent: {e}")
+        return client
 
 def main():
     parser = argparse.ArgumentParser(description="CLI for interacting with an agent.")
@@ -171,6 +219,7 @@ def main():
                     client_secret=client_secret,
                     version=os.environ.get("version", None),
                 ))
+                client = select_agent_interactively(client, agent_id)
             except (PinionAIConfigurationError, Exception) as e:
                 print(f"Failed to initialize PinionAI client from environment: {e}")
                 client = None
@@ -283,9 +332,9 @@ def main():
                 print(f"Agent: {full_ai_response_string}")
                 run_coroutine_in_event_loop(client.update_pinion_session())
 
-                if client.next_intent:
-                    full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(prompt, sender="user"))
-                    print(f"Agent (follow-up): {full_ai_response_string}")
+                while client.next_intent:
+                    follow_up_response = run_coroutine_in_event_loop(client.process_user_input("", sender="user"))
+                    print(f"Agent (follow-up): {follow_up_response}")
                     run_coroutine_in_event_loop(client.update_pinion_session())
 
                 # After AI response, check if transfer requested

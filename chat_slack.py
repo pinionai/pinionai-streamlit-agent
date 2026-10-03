@@ -16,6 +16,7 @@ from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+from agent_selection import get_available_agents, resolve_agent
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -212,6 +213,53 @@ async def handle_message_events(event, say):
             await say("No active session to end.")
         return
 
+    if text.lower() == "!agents":
+        p_client = await get_client(channel_id)
+        if not p_client:
+            await say("No active agent is available. Set the agent credentials before listing agents.")
+            return
+        try:
+            agents = await get_available_agents(p_client)
+            if agents:
+                await say("Available agents:\n" + "\n".join(
+                    f"- {agent['agent_name']} (`{agent['uid']}`)" for agent in agents
+                ) + "\nUse `!agent <name or uid>` to load one.")
+            else:
+                await say("No agents were returned for this account.")
+        except Exception as e:
+            await say(f"Could not list available agents: {e}")
+        return
+
+    if text.lower().startswith("!agent "):
+        p_client = await get_client(channel_id)
+        if not p_client:
+            await say("No active agent is available. Set the agent credentials before selecting an agent.")
+            return
+        try:
+            agents = await get_available_agents(p_client)
+            selected_agent = resolve_agent(agents, text.split(maxsplit=1)[1])
+            if not selected_agent:
+                await say("Agent not found. Use `!agents` to see available agents.")
+                return
+            new_client = await AsyncPinionAIClient.create(
+                agent_id=selected_agent["uid"],
+                host_url=os.environ.get("host_url"),
+                client_id=os.environ.get("client_id"),
+                client_secret=os.environ.get("client_secret"),
+                version=os.environ.get("version", None),
+            )
+            if not new_client.chat_messages and new_client.var.get("agentStart"):
+                new_client.add_message_to_history("assistant", new_client.var["agentStart"])
+            sessions[channel_id] = new_client
+            try:
+                await p_client.close()
+            except Exception as e:
+                logger.warning(f"Could not close previous client for {channel_id}: {e}")
+            await say(f"Loaded *{selected_agent['agent_name']}*.\n{new_client.var.get('agentStart', '')}")
+        except Exception as e:
+            await say(f"Could not load selected agent: {e}")
+        return
+
     # 4. Process Message with PinionAI
     p_client = await get_client(channel_id)
     if not p_client:
@@ -230,10 +278,10 @@ async def handle_message_events(event, say):
         await p_client.update_pinion_session()
         
         # Handle follow-up intents
-        if p_client.next_intent:
-             follow_up = await p_client.process_user_input("", sender="user")
-             await say(follow_up)
-             await p_client.update_pinion_session()
+        while p_client.next_intent:
+            follow_up = await p_client.process_user_input("", sender="user")
+            await say(follow_up)
+            await p_client.update_pinion_session()
              
         # Note: gRPC live transfer is not fully implemented here as it would require
         # a long-running background task per channel to listen for gRPC updates

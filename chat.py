@@ -5,6 +5,7 @@ import asyncio
 from io import StringIO
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+from agent_selection import get_available_agents
 import threading
 from dotenv import load_dotenv
 load_dotenv()
@@ -247,6 +248,60 @@ else:
 if st.session_state.pinion_client:
     client: AsyncPinionAIClient = st.session_state.pinion_client
     var = client.var # Convenience to the client's var dictionary
+
+    if "available_agents" not in st.session_state:
+        try:
+            st.session_state.available_agents = run_coroutine_in_event_loop(get_available_agents(client))
+        except Exception as e:
+            st.session_state.available_agents = []
+            st.session_state.agent_list_error = str(e)
+
+    available_agents = st.session_state.available_agents
+    if available_agents:
+        agent_by_uid = {agent["uid"]: agent for agent in available_agents}
+        if "selected_agent_uid" not in st.session_state:
+            default_agent_id = os.environ.get("agent_id")
+            active_agent_id = getattr(client, "_agent_id", None)
+            st.session_state.selected_agent_uid = next(
+                (
+                    candidate
+                    for candidate in (default_agent_id, active_agent_id)
+                    if candidate in agent_by_uid
+                ),
+                available_agents[0]["uid"],
+            )
+
+        with st.expander("Available agents"):
+            with st.form("agent_selection_form"):
+                selected_agent_uid = st.selectbox(
+                    "Select agent",
+                    options=list(agent_by_uid),
+                    format_func=lambda uid: agent_by_uid[uid]["agent_name"],
+                    key="selected_agent_uid",
+                )
+                if st.form_submit_button("Load agent"):
+                    if selected_agent_uid != getattr(client, "_agent_id", None):
+                        try:
+                            with st.spinner("Loading agent..."):
+                                new_client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
+                                    agent_id=selected_agent_uid,
+                                    host_url=os.environ.get("host_url"),
+                                    client_id=os.environ.get("client_id"),
+                                    client_secret=os.environ.get("client_secret"),
+                                    version=os.environ.get("version", None),
+                                ))
+                                if not new_client.chat_messages and new_client.var.get("agentStart"):
+                                    new_client.add_message_to_history("assistant", new_client.var["agentStart"])
+                                run_coroutine_in_event_loop(client.close())
+                                st.session_state.pinion_client = new_client
+                                st.session_state.end_chat_clicked = False
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to load selected agent: {e}")
+                    else:
+                        st.info("This agent is already loaded.")
+    elif st.session_state.get("agent_list_error"):
+        st.info(f"Available agents could not be loaded: {st.session_state.agent_list_error}")
 else:
     st.stop()
 
@@ -342,8 +397,8 @@ if input_text is not None:
                     except Exception as e:
                         st.error(f"Failed to generate TTS audio: {e}")
             
-            # Handle if a next_intent was set by the AI's processing. Next_intent turn handled internally
-            if client.next_intent:
+            # Process chained next intents until the client has no further intent.
+            while client.next_intent:
                 with st.chat_message("assistant", avatar=assistant_img):
                     with st.spinner("Thinking..."):
                         # Process the next_intent (user_input might be empty or the next_intent itself)

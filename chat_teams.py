@@ -22,6 +22,7 @@ from botbuilder.core import (
 from botbuilder.schema import Activity, ActivityTypes
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+from agent_selection import get_available_agents, resolve_agent
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -185,6 +186,55 @@ class PinionAIBot(ActivityHandler):
                 await turn_context.send_activity("No active session to end.")
             return
 
+        if text.lower() == "!agents":
+            p_client = await get_client(conversation_id)
+            if not p_client:
+                await turn_context.send_activity("No active agent is available. Set the agent credentials before listing agents.")
+                return
+            try:
+                agents = await get_available_agents(p_client)
+                if agents:
+                    await turn_context.send_activity("Available agents:\n" + "\n".join(
+                        f"- {agent['agent_name']} ({agent['uid']})" for agent in agents
+                    ) + "\nUse `!agent <name or uid>` to load one.")
+                else:
+                    await turn_context.send_activity("No agents were returned for this account.")
+            except Exception as e:
+                await turn_context.send_activity(f"Could not list available agents: {e}")
+            return
+
+        if text.lower().startswith("!agent "):
+            p_client = await get_client(conversation_id)
+            if not p_client:
+                await turn_context.send_activity("No active agent is available. Set the agent credentials before selecting an agent.")
+                return
+            try:
+                agents = await get_available_agents(p_client)
+                selected_agent = resolve_agent(agents, text.split(maxsplit=1)[1])
+                if not selected_agent:
+                    await turn_context.send_activity("Agent not found. Use `!agents` to see available agents.")
+                    return
+                new_client = await AsyncPinionAIClient.create(
+                    agent_id=selected_agent["uid"],
+                    host_url=os.environ.get("host_url"),
+                    client_id=os.environ.get("client_id"),
+                    client_secret=os.environ.get("client_secret"),
+                    version=os.environ.get("version", None),
+                )
+                if not new_client.chat_messages and new_client.var.get("agentStart"):
+                    new_client.add_message_to_history("assistant", new_client.var["agentStart"])
+                sessions[conversation_id] = new_client
+                try:
+                    await p_client.close()
+                except Exception as e:
+                    logger.warning(f"Could not close previous client for {conversation_id}: {e}")
+                await turn_context.send_activity(
+                    f"**{selected_agent['agent_name']}** loaded.\n\n{new_client.var.get('agentStart', '')}"
+                )
+            except Exception as e:
+                await turn_context.send_activity(f"Could not load selected agent: {e}")
+            return
+
         # 4. Process Message with PinionAI
         p_client = await get_client(conversation_id)
         if not p_client:
@@ -200,10 +250,10 @@ class PinionAIBot(ActivityHandler):
             await p_client.update_pinion_session()
             
             # Handle follow-up intents
-            if p_client.next_intent:
-                 follow_up = await p_client.process_user_input("", sender="user")
-                 await turn_context.send_activity(follow_up)
-                 await p_client.update_pinion_session()
+            while p_client.next_intent:
+                follow_up = await p_client.process_user_input("", sender="user")
+                await turn_context.send_activity(follow_up)
+                await p_client.update_pinion_session()
                  
         except PinionAIError as e:
             logger.error(f"PinionAI Error: {e}")
