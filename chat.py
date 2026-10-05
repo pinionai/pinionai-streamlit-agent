@@ -5,7 +5,7 @@ import asyncio
 from io import StringIO
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
-from agent_selection import get_available_agents
+from agent_selection import get_available_agents, merge_agent_capabilities
 import threading
 from dotenv import load_dotenv
 load_dotenv()
@@ -279,7 +279,16 @@ if st.session_state.pinion_client:
                     format_func=lambda uid: agent_by_uid[uid]["agent_name"],
                     key="selected_agent_uid",
                 )
-                if st.form_submit_button("Load agent"):
+                col_load, col_merge = st.columns(2)
+                with col_load:
+                    load_agent = st.form_submit_button("Load agent")
+                with col_merge:
+                    merge_agent = st.form_submit_button(
+                        "Merge agent",
+                        help="Add this agent's capabilities to the current chat without replacing its session.",
+                    )
+
+                if load_agent:
                     if selected_agent_uid != getattr(client, "_agent_id", None):
                         try:
                             with st.spinner("Loading agent..."):
@@ -300,6 +309,25 @@ if st.session_state.pinion_client:
                             st.error(f"Failed to load selected agent: {e}")
                     else:
                         st.info("This agent is already loaded.")
+                if merge_agent:
+                    try:
+                        with st.spinner("Merging agent capabilities..."):
+                            run_coroutine_in_event_loop(merge_agent_capabilities(
+                                client,
+                                selected_agent_uid,
+                                host_url=os.environ.get("host_url"),
+                                client_id=os.environ.get("client_id"),
+                                client_secret=os.environ.get("client_secret"),
+                                version=os.environ.get("version", None),
+                            ))
+                        st.success(
+                            f"Capabilities from {agent_by_uid[selected_agent_uid]['agent_name']} "
+                            "merged into the current session."
+                        )
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to merge selected agent: {e}")
     elif st.session_state.get("agent_list_error"):
         st.info(f"Available agents could not be loaded: {st.session_state.agent_list_error}")
 else:

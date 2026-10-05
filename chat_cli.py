@@ -17,7 +17,11 @@ import threading
 import getpass
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
-from agent_selection import get_available_agents, resolve_agent
+from agent_selection import (
+    get_available_agents,
+    merge_agent_capabilities,
+    resolve_agent,
+)
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -241,6 +245,8 @@ def main():
     print("Type your message and press Enter.")
     print("Commands:")
     print("  /add <path> - merge an AIA agent into the current session")
+    print("  /merge <name or uid> - merge an available account agent into this session")
+    print("  /agents     - list available account agents")
     print("  /end        - end chat session and exit")
     print("  /continue   - continue polling or force refresh")
     
@@ -275,6 +281,42 @@ def main():
             # show any new messages
             if poll_for_updates(client, timeout=5):
                 display_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
+            continue
+
+        if trimmed_prompt == "/agents" or trimmed_prompt == "/merge" or trimmed_prompt.startswith("/merge "):
+            try:
+                agents = run_coroutine_in_event_loop(get_available_agents(client))
+                if not agents:
+                    print("No agents were returned for this account.")
+                    continue
+                print("Available agents:")
+                for agent in agents:
+                    print(f"  {agent['agent_name']} [{agent['uid']}]")
+                if trimmed_prompt == "/agents":
+                    print("Use /merge <name or uid> to add an agent's capabilities.")
+                    continue
+
+                identifier = prompt.strip()[len("/merge"):].strip()
+                if not identifier:
+                    identifier = input("Agent name or UID to merge: ").strip()
+                selected_agent = resolve_agent(agents, identifier)
+                if selected_agent is None:
+                    print("Agent not found; use /agents to see available agents.")
+                    continue
+                run_coroutine_in_event_loop(merge_agent_capabilities(
+                    client,
+                    selected_agent["uid"],
+                    host_url=os.environ.get("host_url"),
+                    client_id=os.environ.get("client_id"),
+                    client_secret=os.environ.get("client_secret"),
+                    version=os.environ.get("version", None),
+                ))
+                print(f"Capabilities from {selected_agent['agent_name']} merged into the current session.")
+                var = client.var
+                user_img = var.get("userImage")
+                assistant_img = var.get("assistImage")
+            except Exception as e:
+                print(f"Could not merge selected agent: {e}")
             continue
         
         if trimmed_prompt.startswith("/add "):

@@ -16,7 +16,11 @@ from slack_bolt.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
-from agent_selection import get_available_agents, resolve_agent
+from agent_selection import (
+    get_available_agents,
+    merge_agent_capabilities,
+    resolve_agent,
+)
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -223,11 +227,38 @@ async def handle_message_events(event, say):
             if agents:
                 await say("Available agents:\n" + "\n".join(
                     f"- {agent['agent_name']} (`{agent['uid']}`)" for agent in agents
-                ) + "\nUse `!agent <name or uid>` to load one.")
+                ) + "\nUse `!agent <name or uid>` to load one, or "
+                    "`!merge <name or uid>` to merge its capabilities into the current session.")
             else:
                 await say("No agents were returned for this account.")
         except Exception as e:
             await say(f"Could not list available agents: {e}")
+        return
+
+    if text.lower().startswith("!merge "):
+        p_client = await get_client(channel_id)
+        if not p_client:
+            await say("No active agent is available. Set the agent credentials before merging an agent.")
+            return
+        try:
+            agents = await get_available_agents(p_client)
+            selected_agent = resolve_agent(agents, text.split(maxsplit=1)[1])
+            if not selected_agent:
+                await say("Agent not found. Use `!agents` to see available agents.")
+                return
+            await merge_agent_capabilities(
+                p_client,
+                selected_agent["uid"],
+                host_url=os.environ.get("host_url"),
+                client_id=os.environ.get("client_id"),
+                client_secret=os.environ.get("client_secret"),
+                version=os.environ.get("version", None),
+            )
+            await say(
+                f"Capabilities from *{selected_agent['agent_name']}* merged into the current session."
+            )
+        except Exception as e:
+            await say(f"Could not merge selected agent: {e}")
         return
 
     if text.lower().startswith("!agent "):
