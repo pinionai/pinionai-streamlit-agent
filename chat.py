@@ -273,20 +273,36 @@ if st.session_state.pinion_client:
 
         with st.expander("Available agents"):
             with st.form("agent_selection_form"):
-                selected_agent_uid = st.selectbox(
-                    "Select agent",
-                    options=list(agent_by_uid),
-                    format_func=lambda uid: agent_by_uid[uid]["agent_name"],
-                    key="selected_agent_uid",
-                )
-                col_load, col_merge = st.columns(2)
-                with col_load:
-                    load_agent = st.form_submit_button("Load agent")
-                with col_merge:
-                    merge_agent = st.form_submit_button(
-                        "Merge agent",
-                        help="Add this agent's capabilities to the current chat without replacing its session.",
+                col_agent_actions, col_aia_actions = st.columns(2)
+
+                with col_agent_actions:
+                    selected_agent_uid = st.selectbox(
+                        "Select agent",
+                        options=list(agent_by_uid),
+                        format_func=lambda uid: agent_by_uid[uid]["agent_name"],
+                        key="selected_agent_uid",
                     )
+                    load_agent_col, merge_agent_col = st.columns(2)
+                    with load_agent_col:
+                        load_agent = st.form_submit_button("Load agent")
+                    with merge_agent_col:
+                        merge_agent = st.form_submit_button(
+                            "Merge agent",
+                            help="Add this agent's capabilities to the current chat without replacing its session.",
+                        )
+
+                with col_aia_actions:
+                    uploaded_aia = st.file_uploader(
+                        "Upload AIA agent file or shortcut",
+                        type="aia",
+                        accept_multiple_files=False,
+                        help="Load or merge a saved PinionAI AIA agent into this session.",
+                    )
+                    load_aia_col, merge_aia_col = st.columns(2)
+                    with load_aia_col:
+                        load_aia_file = st.form_submit_button("Load AIA")
+                    with merge_aia_col:
+                        merge_aia_file = st.form_submit_button("Merge AIA")
 
                 if load_agent:
                     if selected_agent_uid != getattr(client, "_agent_id", None):
@@ -328,6 +344,58 @@ if st.session_state.pinion_client:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to merge selected agent: {e}")
+                if load_aia_file:
+                    if uploaded_aia is None:
+                        st.error("Please upload an AIA file to load first.")
+                    else:
+                        keys_to_delete = [key for key in st.session_state.keys()]
+                        for key in keys_to_delete:
+                            del st.session_state[key]
+                        try:
+                            file_bytes = uploaded_aia.getvalue()
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            new_client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                                file_stream=stringio.read(),
+                                host_url=os.environ.get("host_url")
+                            ))
+                            if init_message == 'key_secret required for private version':
+                                st.session_state.awaiting_key_secret = True
+                                st.session_state.uploaded_file_bytes = file_bytes
+                                st.session_state.merging_aia = False
+                                st.rerun()
+                            elif new_client:
+                                st.session_state.pinion_client = new_client
+                                st.session_state.awaiting_key_secret = False
+                                st.session_state.uploaded_file_bytes = None
+                                st.rerun()
+                            else:
+                                st.error(f"Failed to load agent: {init_message}")
+                        except Exception as e:
+                            st.error(f"Failed to initialize PinionAI client from AIA file: {e}")
+                if merge_aia_file:
+                    if uploaded_aia is None:
+                        st.error("Please upload an AIA file to merge first.")
+                    elif "pinion_client" not in st.session_state:
+                        st.error("No active session to merge into.")
+                    else:
+                        try:
+                            file_bytes = uploaded_aia.getvalue()
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            result_msg = run_coroutine_in_event_loop(st.session_state.pinion_client.add_agent_from_aia(
+                                file_stream=stringio.read()
+                            ))
+                            if result_msg == 'key_secret required for private version':
+                                st.session_state.merging_aia = True
+                                st.session_state.uploaded_file_bytes = file_bytes
+                                st.rerun()
+                            elif "Error" not in result_msg:
+                                st.success(result_msg)
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(result_msg)
+                        except Exception as e:
+                            st.error(f"Merge analysis failed: {e}")
     elif st.session_state.get("agent_list_error"):
         st.info(f"Available agents could not be loaded: {st.session_state.agent_list_error}")
 else:

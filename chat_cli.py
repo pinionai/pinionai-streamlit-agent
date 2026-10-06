@@ -244,11 +244,12 @@ def main():
     print(var.get("agentSubtitle"))
     print("Type your message and press Enter.")
     print("Commands:")
-    print("  /add <path> - merge an AIA agent into the current session")
+    print("  /load <path> - load a new agent from an AIA file")
+    print("  /add <path>  - merge an AIA agent into the current session")
     print("  /merge <name or uid> - merge an available account agent into this session")
-    print("  /agents     - list available account agents")
-    print("  /end        - end chat session and exit")
-    print("  /continue   - continue polling or force refresh")
+    print("  /agents      - list available account agents")
+    print("  /end         - end chat session and exit")
+    print("  /continue    - continue polling or force refresh")
     
     user_img = var.get("userImage")
     assistant_img = var.get("assistImage")
@@ -319,6 +320,40 @@ def main():
                 print(f"Could not merge selected agent: {e}")
             continue
         
+        if trimmed_prompt.startswith("/load "):
+            aia_path = prompt.strip()[6:].strip()
+            if not os.path.exists(aia_path):
+                print(f"Error: File not found at '{aia_path}'")
+                continue
+            try:
+                with open(aia_path, "rb") as f:
+                    raw = f.read()
+                file_text = raw.decode("utf-8")
+                new_client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                    file_stream=file_text,
+                    host_url=os.environ.get("host_url")
+                ))
+                if init_message == 'key_secret required for private version':
+                    print("This AIA file is private and requires a secret key to decrypt.")
+                    key_secret = getpass.getpass("Enter key_secret: ")
+                    new_client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                        file_stream=file_text,
+                        host_url=os.environ.get("host_url"),
+                        key_secret=key_secret
+                    ))
+                if new_client:
+                    cleanup_client(client)
+                    client = new_client
+                    var = client.var
+                    user_img = var.get("userImage")
+                    assistant_img = var.get("assistImage")
+                    print(f"Loaded agent from {aia_path}: {client.var.get('agentTitle', 'Agent')}")
+                else:
+                    print(f"Could not load agent: {init_message}")
+            except Exception as e:
+                print(f"Error loading AIA file: {e}")
+            continue
+
         if trimmed_prompt.startswith("/add "):
             aia_path = prompt.strip()[5:].strip()
             if not os.path.exists(aia_path):
@@ -343,7 +378,6 @@ def main():
                 
                 if "Error" not in result_msg:
                     print(f"Success: {result_msg}")
-                    # Refresh vars as they might have changed
                     var = client.var
                     user_img = var.get("userImage")
                     assistant_img = var.get("assistImage")

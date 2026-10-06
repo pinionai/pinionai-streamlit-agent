@@ -1,11 +1,42 @@
 """Helpers for listing agents available to the configured PinionAI account."""
 
+import os
+
 from pinionai import AsyncPinionAIClient
 
 
 async def get_available_agents(client):
-    """Return valid agent records from the client's agent-list API."""
-    response_data = await client.agent_list()
+    """Return valid agent records using account credentials when available."""
+    agent_id = os.environ.get("agent_id")
+    host_url = os.environ.get("host_url")
+    client_id = os.environ.get("client_id")
+    client_secret = os.environ.get("client_secret")
+    if not all((agent_id, host_url, client_id, client_secret)):
+        raise ValueError(
+            "Listing account agents requires agent_id, host_url, client_id, and client_secret."
+        )
+
+    directory_client = client
+    close_directory_client = False
+    if (
+        getattr(client, "_client_id", None) != client_id
+        or getattr(client, "_client_secret", None) != client_secret
+    ):
+        directory_client = await AsyncPinionAIClient.create(
+            agent_id=agent_id,
+            host_url=host_url,
+            client_id=client_id,
+            client_secret=client_secret,
+            version=os.environ.get("version", None),
+        )
+        close_directory_client = True
+
+    try:
+        response_data = await directory_client.agent_list()
+    finally:
+        if close_directory_client:
+            await directory_client.close()
+
     if not isinstance(response_data, dict) or not isinstance(response_data.get("data"), list):
         raise ValueError("Unexpected response format when getting the agent list.")
     if response_data.get("success") is False:
