@@ -139,7 +139,8 @@ if not os.environ.get("agent_id"):
                                     client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
                                         file_stream=stringio.read(),
                                         host_url=os.environ.get("host_url"),
-                                        key_secret=key_secret
+                                        key_secret=key_secret,
+                                        url_params=dict(st.query_params)
                                     ))
                                     if client:
                                         st.session_state.pinion_client = client
@@ -181,7 +182,8 @@ if not os.environ.get("agent_id"):
                             stringio = StringIO(file_bytes.decode("utf-8"))
                             client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
                                 file_stream=stringio.read(),
-                                host_url=os.environ.get("host_url")
+                                host_url=os.environ.get("host_url"),
+                                url_params=dict(st.query_params)
                                 ))
                             if init_message == 'key_secret required for private version':
                                 st.session_state.awaiting_key_secret = True
@@ -235,7 +237,8 @@ else:
                     host_url=os.environ.get("host_url"),
                     client_id=os.environ.get("client_id"),
                     client_secret=os.environ.get("client_secret"),
-                    version=os.environ.get("version", None) # Change to serve specific version (draft, development, test, live, archived). None loads latest in progress.
+                    version=os.environ.get("version", None), # Change to serve specific version (draft, development, test, live, archived). None loads latest in progress.
+                    url_params=dict(st.query_params)
                 ))
                 if not st.session_state.pinion_client.chat_messages and st.session_state.pinion_client.var.get("agentStart"):
                     st.session_state.pinion_client.add_message_to_history(
@@ -314,6 +317,7 @@ if st.session_state.pinion_client:
                                     client_id=os.environ.get("client_id"),
                                     client_secret=os.environ.get("client_secret"),
                                     version=os.environ.get("version", None),
+                                    url_params=dict(st.query_params)
                                 ))
                                 if not new_client.chat_messages and new_client.var.get("agentStart"):
                                     new_client.add_message_to_history("assistant", new_client.var["agentStart"])
@@ -356,7 +360,8 @@ if st.session_state.pinion_client:
                             stringio = StringIO(file_bytes.decode("utf-8"))
                             new_client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
                                 file_stream=stringio.read(),
-                                host_url=os.environ.get("host_url")
+                                host_url=os.environ.get("host_url"),
+                                url_params=dict(st.query_params)
                             ))
                             if init_message == 'key_secret required for private version':
                                 st.session_state.awaiting_key_secret = True

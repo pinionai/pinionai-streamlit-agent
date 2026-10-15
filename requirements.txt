@@ -6,7 +6,7 @@ aiofile==3.12.3
     # via py-key-value-aio
 aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.14.4
+aiohttp==3.14.5
     # via
     #   -r requirements.in
     #   aiohttp-retry
@@ -21,7 +21,7 @@ altair==6.3.0
     # via streamlit
 annotated-types==0.8.0
     # via pydantic
-anthropic==1.11.0
+anthropic==1.15.0
     # via pinionai
 anyio==4.15.1
     # via
@@ -44,11 +44,13 @@ attrs==26.1.0
     #   jsonschema
     #   jsonschema-path
     #   referencing
-authlib==1.8.0
+authlib==1.9.1
     # via fastmcp-slim
 azure-core==1.41.0
     # via msrest
-beartype==0.22.9
+bcrypt==5.0.0
+    # via paramiko
+beartype==0.23.1
     # via py-key-value-aio
 botbuilder-core==4.17.1
     # via
@@ -72,13 +74,13 @@ botframework-connector==4.17.1
     #   botframework-streaming
 botframework-streaming==4.17.1
     # via botbuilder-core
-boto3==1.43.108
+boto3==1.43.114
     # via pinionai
-botocore==1.43.108
+botocore==1.43.114
     # via
     #   boto3
     #   s3transfer
-cachetools==7.2.1
+cachetools==7.2.2
     # via py-key-value-aio
 caio==0.12.9
     # via aiofile
@@ -89,7 +91,9 @@ certifi==2026.7.22
     #   msrest
     #   requests
 cffi==2.1.1
-    # via cryptography
+    # via
+    #   cryptography
+    #   pynacl
 charset-normalizer==3.5.2
     # via requests
 click==8.5.0
@@ -102,6 +106,7 @@ cryptography==50.0.2
     #   google-auth
     #   joserfc
     #   msal
+    #   paramiko
     #   pinionai
     #   pyjwt
     #   sendgrid
@@ -111,7 +116,7 @@ distro==1.9.0
     # via
     #   google-genai
     #   telnyx
-dnspython==2.8.0
+dnspython==2.9.0
     # via email-validator
 docstring-parser==0.18.0
     # via
@@ -121,9 +126,9 @@ email-validator==2.3.0
     # via pydantic
 exceptiongroup==1.3.1
     # via fastmcp-slim
-fastmcp==4.0.11
+fastmcp==4.1.0
     # via pinionai
-fastmcp-slim==4.0.11
+fastmcp-slim==4.1.0
     # via fastmcp
 ffmpeg-python==0.2.0
     # via pinionai
@@ -137,7 +142,7 @@ geographiclib==2.1
     # via geopy
 geopy==2.5.0
     # via pinionai-chat
-google-api-core==2.41.0
+google-api-core==2.42.0
     # via
     #   google-cloud-appengine-logging
     #   google-cloud-core
@@ -145,7 +150,7 @@ google-api-core==2.41.0
     #   google-cloud-speech
     #   google-cloud-storage
     #   pinionai
-google-auth==2.60.0
+google-auth==2.62.0
     # via
     #   google-api-core
     #   google-cloud-appengine-logging
@@ -167,13 +172,13 @@ google-cloud-logging==3.17.0
     # via pinionai-chat
 google-cloud-speech==2.41.0
     # via pinionai
-google-cloud-storage==3.16.0
+google-cloud-storage==3.17.1
     # via pinionai
 google-crc32c==1.9.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==2.28.0
+google-genai==2.31.0
     # via pinionai
 google-resumable-media==2.11.0
     # via google-cloud-storage
@@ -212,8 +217,6 @@ httpcore==1.0.9
     # via httpx
 httpcore2==2.13.1
     # via httpx2
-httptools==0.8.0
-    # via streamlit
 httpx==0.28.1
     # via
     #   -r requirements.in
@@ -237,6 +240,8 @@ idna==3.20
     #   httpx2
     #   requests
     #   yarl
+invoke==3.0.3
+    # via paramiko
 isodate==0.7.2
     # via msrest
 itsdangerous==2.2.0
@@ -264,7 +269,7 @@ joserfc==1.7.5
     # via
     #   authlib
     #   fastmcp-slim
-jsonpath-ng==1.9.1
+jsonpath-ng==1.10.1
     # via pinionai
 jsonpickle==3.4.2
     # via botbuilder-core
@@ -282,7 +287,7 @@ keyring==25.7.0
     # via py-key-value-aio
 levenshtein==0.27.5
     # via python-levenshtein
-markdown==3.11
+markdown==3.11.1
     # via pinionai
 markdown-it-py==4.2.0
     # via rich
@@ -300,7 +305,7 @@ mdurl==0.1.2
     # via markdown-it-py
 mini-racer==0.14.1
     # via pinionai
-more-itertools==11.1.0
+more-itertools==11.2.1
     # via
     #   jaraco-classes
     #   jaraco-functools
@@ -310,25 +315,26 @@ msrest==0.7.1
     # via
     #   botbuilder-schema
     #   botframework-connector
-multidict==6.9.1
+multidict==7.1.0
     # via
     #   aiohttp
     #   yarl
-narwhals==2.26.0
+narwhals==2.27.1
     # via altair
-numpy==2.5.3
+numpy==2.5.4
     # via
     #   pandas
     #   pydeck
     #   streamlit
 oauthlib==4.0.0
     # via requests-oauthlib
-openai==3.26.0
+openai==3.31.0
     # via pinionai
 openapi-pydantic==0.6.0
     # via fastmcp-slim
 opentelemetry-api==1.45.1
     # via
+    #   anthropic
     #   fastmcp-slim
     #   google-api-core
     #   google-cloud-logging
@@ -342,15 +348,17 @@ pandas==3.0.6
     # via
     #   pinionai
     #   streamlit
+paramiko==5.0.0
+    # via pinionai
 pathable==0.6.0
     # via jsonschema-path
 pillow==12.3.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.4.4
+pinionai==0.4.5
     # via pinionai-chat
-platformdirs==4.12.3
+platformdirs==4.13.1
     # via fastmcp-slim
 propcache==0.5.4
     # via
@@ -385,15 +393,15 @@ psycopg-pool==3.3.3
     # via psycopg
 py-key-value-aio==0.4.6
     # via fastmcp-slim
-pyarrow==25.0.1
+pyarrow==26.0.0
     # via streamlit
 pyasn1==0.6.4
     # via pyasn1-modules
 pyasn1-modules==0.4.2
     # via google-auth
-pycparser==3.0
+pycparser==3.11
     # via cffi
-pydantic==2.13.5
+pydantic==2.14.1
     # via
     #   anthropic
     #   fastmcp-slim
@@ -404,9 +412,9 @@ pydantic==2.13.5
     #   openapi-pydantic
     #   pydantic-settings
     #   telnyx
-pydantic-core==2.46.5
+pydantic-core==2.50.1
     # via pydantic
-pydantic-settings==2.15.0
+pydantic-settings==2.16.0
     # via fastmcp-slim
 pydeck==0.9.3
     # via streamlit
@@ -420,6 +428,8 @@ pyjwt==2.15.1
     #   mcp
     #   msal
     #   twilio
+pynacl==1.6.2
+    # via paramiko
 pyperclip==1.11.0
     # via fastmcp-slim
 python-dateutil==2.9.0.post0
@@ -497,25 +507,23 @@ sniffio==1.3.1
     #   telnyx
 sse-starlette==3.5.0
     # via mcp
-starlette==1.7.0
+starlette==1.8.0
     # via
     #   fastmcp-slim
     #   mcp
     #   sse-starlette
     #   streamlit
-streamlit==1.65.0
+streamlit==1.66.0
     # via pinionai-chat
-telnyx==4.183.0
+telnyx==4.185.0
     # via pinionai
 tenacity==9.1.4
     # via google-genai
-toml==0.10.2
-    # via streamlit
-truststore==0.10.4
+truststore==0.10.5
     # via
     #   httpcore2
     #   httpx2
-twilio==9.11.2
+twilio==9.12.0
     # via pinionai
 typing-extensions==4.16.0
     # via
@@ -534,6 +542,7 @@ typing-extensions==4.16.0
     #   py-key-value-aio
     #   pydantic
     #   pydantic-core
+    #   pydantic-settings
     #   streamlit
     #   telnyx
     #   typing-inspection
@@ -542,7 +551,7 @@ typing-inspection==0.4.4
     #   mcp
     #   pydantic
     #   pydantic-settings
-uncalled-for==0.4.0
+uncalled-for==0.4.1
     # via fastmcp-slim
 urllib3==2.8.0
     # via

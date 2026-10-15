@@ -22,7 +22,7 @@ dependencies = [
     # Core Application & Framework
     "streamlit",
     "Pillow",
-    "pinionai[all]",  # PinionAI Client Core + all optional dependencies (line 43-53)
+    "pinionai[all]",  # PinionAI Client Core + all optional dependencies
     "httpx",
     "python-dotenv",
     "aiohttp",

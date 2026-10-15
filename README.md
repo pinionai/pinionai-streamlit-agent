@@ -105,12 +105,10 @@ pip install "pinionai[all]"
 - javascript = ["mini-racer"]
 - sendgrid = ["sendgrid"]
 - twilio = ["twilio"]
-- mcp = ["fastmcp"]
 - data = ["pandas"]
-- postgres = ["psycopg[binary,pool]"]
 - google = ["google-genai>=1.72.0"]
 - all = [
-  "pinionai[gcp,aws,openai,anthropic,javascript,twilio,sendgrid,mcp,data,postgres,google]"
+  "pinionai[gcp,aws,openai,anthropic,javascript,twilio,sendgrid,data,google]"
   ]
 
 2. Setup the Python virtual environment and install the dependencies:
@@ -600,6 +598,9 @@ gcloud run deploy ${IMAGE_NAME} \
     --allow-unauthenticated \
     --min-instances 0 \
     --cpu-boost \
+    --no-cpu-throttling \
+    --session-affinity \
+    --timeout=3600 \
     --set-env-vars client_id=YOUR_CLIENT_ID_HERE,client_secret=YOUR_CLIENT_SECRET_HERE,etc...
 ```
 
@@ -648,6 +649,9 @@ gcloud run deploy ${IMAGE_NAME} \
     --allow-unauthenticated \
     --min-instances 0 \
     --cpu-boost \
+    --no-cpu-throttling \
+    --session-affinity \
+    --timeout=3600 \
     --env-vars-file deploy/prod-agent/env.yaml
 ```
 
@@ -657,17 +661,12 @@ gcloud run deploy ${IMAGE_NAME} \
 --env-vars-file deploy/prod-aia-file/env.yaml
 ```
 
-**OR**
+**Critical Cloud Run Performance Flags Used Here:**
 
-- For Slack or Teams specific deployments, use their respective YAML files:
-
-```bash
-# For Slack
---env-vars-file deploy/prod-slack/env.yaml
-
-# For Teams
---env-vars-file deploy/prod-teams/env.yaml
-```
+- --no-cpu-throttling: This turns on the "CPU Always Allocated" feature. This is absolutely vital for your app because it prevents Cloud Run from freezing your asynchronous gRPC background polling loops (listen_to_grpc_updates) between active user keypresses.
+- --session-affinity: Each chat's PinionAI client lives in the memory of the instance that created it, so a browser must keep reaching the same instance. Do not add Redis (`REDIS_URL`) to "fix" this: the client cannot be serialized, so it would be lost after every event.
+- --timeout=3600: Increases the request timeout to 1 hour. This ensures long-lived WebSocket chat connections stay alive and don't aggressively drop out if the user takes a brief pause during a chat session.
+- --min-instances: Allowing for miniimum instances to spin down to 0, saves on cost while developing, but is not recommended for production. It will increase cold starts and spin up time substantially, and not recommended for production.
 
 **Important Note:** When hosting an Agent you can serve a specific agent configuration, For a generic app that allows any agent to be loaded via .AIA file (`ai agent`) file, you do not need `client_id`, `client_secret` or a specific `agent_id`. `client_id`, `client_secret` and `agent_id` are **NOT Required** variables.
 
@@ -757,6 +756,9 @@ gcloud run deploy ${IMAGE_NAME} \
     --allow-unauthenticated \
     --min-instances 0 \
     --cpu-boost \
+    --no-cpu-throttling \
+    --session-affinity \
+    --timeout=3600 \
     --env-vars-file deploy/prod-aia-file/env.yaml
 ```
 

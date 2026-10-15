@@ -69,6 +69,7 @@ async def get_client(channel_id: str) -> AsyncPinionAIClient:
     host_url = os.environ.get("host_url")
     client_id = os.environ.get("client_id")
     client_secret = os.environ.get("client_secret")
+    url_params = os.environ.get("URL_PARAMS") or os.environ.get("url_params")
     
     if agent_id and host_url and client_id and client_secret:
         try:
@@ -79,6 +80,7 @@ async def get_client(channel_id: str) -> AsyncPinionAIClient:
                 client_id=client_id,
                 client_secret=client_secret,
                 version=os.environ.get("version", None),
+                url_params=url_params,
             )
             # Add initial greeting if defined
             if not client.chat_messages and client.var.get("agentStart"):
@@ -134,7 +136,8 @@ async def handle_message_events(event, say):
                 p_client, init_message = await AsyncPinionAIClient.create_from_stream(
                     file_stream=pending["file_content"],
                     host_url=os.environ.get("host_url"),
-                    key_secret=text
+                    key_secret=text,
+                    url_params=os.environ.get("URL_PARAMS") or os.environ.get("url_params")
                 )
                 if p_client:
                     sessions[channel_id] = p_client
@@ -181,7 +184,8 @@ async def handle_message_events(event, say):
                             # Load new session
                             p_client, init_message = await AsyncPinionAIClient.create_from_stream(
                                 file_stream=file_content,
-                                host_url=os.environ.get("host_url")
+                                host_url=os.environ.get("host_url"),
+                                url_params=os.environ.get("URL_PARAMS") or os.environ.get("url_params")
                             )
                             
                             if init_message == 'key_secret required for private version':
@@ -278,6 +282,7 @@ async def handle_message_events(event, say):
                 client_id=os.environ.get("client_id"),
                 client_secret=os.environ.get("client_secret"),
                 version=os.environ.get("version", None),
+                url_params=os.environ.get("URL_PARAMS") or os.environ.get("url_params"),
             )
             if not new_client.chat_messages and new_client.var.get("agentStart"):
                 new_client.add_message_to_history("assistant", new_client.var["agentStart"])

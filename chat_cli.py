@@ -94,7 +94,7 @@ def cleanup_client(client: AsyncPinionAIClient):
     except Exception as e:
         print(f"Warning: Error closing HTTP session: {e}")
 
-def select_agent_interactively(client: AsyncPinionAIClient, default_agent_id: str):
+def select_agent_interactively(client: AsyncPinionAIClient, default_agent_id: str, url_params: Optional[str] = None):
     """Offer account agents in the terminal, retaining the configured agent by default."""
     try:
         agents = run_coroutine_in_event_loop(get_available_agents(client))
@@ -134,6 +134,7 @@ def select_agent_interactively(client: AsyncPinionAIClient, default_agent_id: st
             client_id=os.environ.get("client_id"),
             client_secret=os.environ.get("client_secret"),
             version=os.environ.get("version", None),
+            url_params=url_params,
         ))
         cleanup_client(client)
         return new_client
@@ -144,15 +145,23 @@ def select_agent_interactively(client: AsyncPinionAIClient, default_agent_id: st
 def main():
     parser = argparse.ArgumentParser(description="CLI for interacting with an agent.")
     
-    # Add the new argument for the .aia file
+    # Add the argument for the .aia file
     parser.add_argument(
         "-f", "--aia-file",
         type=str,
         help="Path to the .aia agent file to run. If provided, environment variables for client/agent IDs are ignored."
     )
+    parser.add_argument(
+        "-p", "--params", "--url-params",
+        dest="url_params",
+        type=str,
+        default=None,
+        help="URL parameters to pass to the agent (e.g. '?email=alan@pinionai.com&table=12&vin=500000343' or 'email=alan@pinionai.com')."
+    )
     # You might have other arguments, keep them here
     # parser.add_argument(...) 
     args = parser.parse_args()
+    cli_url_params = args.url_params or os.environ.get("URL_PARAMS") or os.environ.get("url_params")
 
     def load_agent_from_aia_path(path: str):
         """Load an agent from a .aia file path. Returns client or None."""
@@ -165,7 +174,8 @@ def main():
             file_text = raw.decode("utf-8")
             client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
                 file_stream=file_text,
-                host_url=os.environ.get("host_url")
+                host_url=os.environ.get("host_url"),
+                url_params=cli_url_params
             ))
             if client:
                 return client
@@ -180,7 +190,8 @@ def main():
                         client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
                             file_stream=file_text,
                             host_url=os.environ.get("host_url"),
-                            key_secret=key_secret
+                            key_secret=key_secret,
+                            url_params=cli_url_params
                         ))
                         if client:
                             return client
@@ -222,8 +233,9 @@ def main():
                     client_id=client_id,
                     client_secret=client_secret,
                     version=os.environ.get("version", None),
+                    url_params=cli_url_params
                 ))
-                client = select_agent_interactively(client, agent_id)
+                client = select_agent_interactively(client, agent_id, url_params=cli_url_params)
             except (PinionAIConfigurationError, Exception) as e:
                 print(f"Failed to initialize PinionAI client from environment: {e}")
                 client = None
@@ -331,7 +343,8 @@ def main():
                 file_text = raw.decode("utf-8")
                 new_client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
                     file_stream=file_text,
-                    host_url=os.environ.get("host_url")
+                    host_url=os.environ.get("host_url"),
+                    url_params=cli_url_params
                 ))
                 if init_message == 'key_secret required for private version':
                     print("This AIA file is private and requires a secret key to decrypt.")
@@ -339,7 +352,8 @@ def main():
                     new_client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
                         file_stream=file_text,
                         host_url=os.environ.get("host_url"),
-                        key_secret=key_secret
+                        key_secret=key_secret,
+                        url_params=cli_url_params
                     ))
                 if new_client:
                     cleanup_client(client)
