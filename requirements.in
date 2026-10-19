@@ -18,3 +18,4 @@ httpx
 python-dotenv
 aiohttp
 psycopg[binary,pool]
+puremagic

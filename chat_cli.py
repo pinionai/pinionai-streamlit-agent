@@ -10,19 +10,23 @@ Controls:
 This client uses AsyncPinionAIClient and interacts via stdin/stdout.
 """
 import argparse
-import os
-import time
 import asyncio
-import threading
 import getpass
-from pinionai import AsyncPinionAIClient
-from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+import os
+import threading
+import time
+
+from dotenv import load_dotenv
+
 from agent_selection import (
     get_available_agents,
     merge_agent_capabilities,
     resolve_agent,
 )
-from dotenv import load_dotenv
+from pinionai import AsyncPinionAIClient
+from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+from pinionai.file_type_detection import is_text_file_type
+
 load_dotenv()
 
 # Persistent event loop management 
@@ -83,8 +87,18 @@ def display_messages(messages, user_img=None, assistant_img=None):
     for message in messages:
         role = message.get("role")
         content = message.get("content")
+        file_type = message.get("file_type", "text/plain")
         prefix = "User: " if role == "user" else "Agent: "
+        if role == "assistant" and not is_text_file_type(file_type):
+            content = f"[{file_type} file response]"
         print(f"{prefix}{content}")
+
+
+def print_agent_response(label, content, file_type):
+    if is_text_file_type(file_type):
+        print(f"{label}{content}")
+    else:
+        print(f"{label}[{file_type} file response]")
 
 def cleanup_client(client: AsyncPinionAIClient):
     """Clean up client resources, particularly the HTTP session."""
@@ -418,13 +432,19 @@ def main():
         else:
             # AI flow
             try:
-                full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(prompt, sender="user"))
-                print(f"Agent: {full_ai_response_string}")
+                full_ai_response_string, full_ai_file_type = run_coroutine_in_event_loop(
+                    client.process_user_input(prompt, sender="user")
+                )
+                print_agent_response("Agent: ", full_ai_response_string, full_ai_file_type)
                 run_coroutine_in_event_loop(client.update_pinion_session())
 
                 while client.next_intent:
-                    follow_up_response = run_coroutine_in_event_loop(client.process_user_input("", sender="user"))
-                    print(f"Agent (follow-up): {follow_up_response}")
+                    follow_up_response, follow_up_file_type = run_coroutine_in_event_loop(
+                        client.process_user_input("", sender="user")
+                    )
+                    print_agent_response(
+                        "Agent (follow-up): ", follow_up_response, follow_up_file_type
+                    )
                     run_coroutine_in_event_loop(client.update_pinion_session())
 
                 # After AI response, check if transfer requested

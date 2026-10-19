@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pinionai-chat"
-version = "0.4.4"
+version = "0.4.6"
 description = "PinionAI Client application"
 requires-python = ">=3.11, <3.15"
 authors = [
@@ -20,7 +20,7 @@ classifiers = [
 
 dependencies = [
     # Core Application & Framework
-    "streamlit",
+    "streamlit[pdf]",
     "Pillow",
     "pinionai[all]",  # PinionAI Client Core + all optional dependencies
     "httpx",
@@ -55,4 +55,3 @@ all = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["pinionai-chat"]
-

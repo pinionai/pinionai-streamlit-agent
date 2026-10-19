@@ -1,11 +1,8 @@
 import json
-import httpx
 import logging
 import random
-from google.genai import types as google_genai_types
-from google.genai.types import (FunctionDeclaration, GenerateContentConfig,
-                                GoogleSearch, HarmBlockThreshold, HarmCategory,
-                                Part, SafetySetting, ThinkingConfig, Tool)
+
+import httpx
 
 # This page is used to add pinionai function extensions so they can be be used in the PinionAIClient. 
 # Add functions here and can call them by creating functional declarations for each in the administration Tools page.

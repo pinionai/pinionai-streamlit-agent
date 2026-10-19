@@ -7,21 +7,25 @@ Usage:
 This client uses slack_bolt (AsyncApp) and interacts via Slack messages.
 It supports loading agents from uploaded .aia files.
 """
-import os
 import asyncio
 import logging
-import httpx
+import mimetypes
+import os
 import re
-from slack_bolt.async_app import AsyncApp
+
+import httpx
+from dotenv import load_dotenv
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
-from pinionai import AsyncPinionAIClient
-from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+from slack_bolt.async_app import AsyncApp
+
 from agent_selection import (
     get_available_agents,
     merge_agent_capabilities,
     resolve_agent,
 )
-from dotenv import load_dotenv
+from pinionai import AsyncPinionAIClient
+from pinionai.exceptions import PinionAIError
+from pinionai.file_type_detection import decode_data_url, is_text_file_type
 
 # Load environment variables
 load_dotenv()
@@ -45,6 +49,35 @@ sessions = {}
 
 # State management for private AIA files: channel_id -> { "file_content": ..., "awaiting_secret": True, "is_merge": False }
 pending_agents = {}
+
+async def send_agent_response(channel_id: str, say, content: str, file_type: str) -> None:
+    """Send text normally and upload binary data-URL responses as Slack files."""
+    file_type = file_type or "text/plain"
+    if is_text_file_type(file_type) and file_type != "text/csv":
+        await say(content)
+        return
+
+    if content.startswith(("http://", "https://")):
+        await say(content)
+        return
+
+    file_bytes = (
+        content.encode("utf-8")
+        if file_type == "text/csv"
+        else decode_data_url(content)
+    )
+    if file_bytes is None:
+        await say(f"Received a {file_type} response that cannot be attached by this Slack adapter.")
+        return
+
+    extension = mimetypes.guess_extension(file_type) or ".bin"
+    await app.client.files_upload_v2(
+        channel=channel_id,
+        content=file_bytes,
+        filename=f"response{extension}",
+        title=f"Agent response ({file_type})",
+    )
+
 
 def clean_slack_text(text: str) -> str:
     """
@@ -309,14 +342,14 @@ async def handle_message_events(event, say):
         # Socket Mode doesn't support easy typing indicators via this API, so we just process.
         
         # AI Processing
-        response_text = await p_client.process_user_input(text, sender="user")
-        await say(response_text)
+        response_text, response_file_type = await p_client.process_user_input(text, sender="user")
+        await send_agent_response(channel_id, say, response_text, response_file_type)
         await p_client.update_pinion_session()
         
         # Handle follow-up intents
         while p_client.next_intent:
-            follow_up = await p_client.process_user_input("", sender="user")
-            await say(follow_up)
+            follow_up, follow_up_file_type = await p_client.process_user_input("", sender="user")
+            await send_agent_response(channel_id, say, follow_up, follow_up_file_type)
             await p_client.update_pinion_session()
              
         # Note: gRPC live transfer is not fully implemented here as it would require

@@ -7,27 +7,29 @@ Usage:
 This client uses botbuilder-core and botbuilder-integration-aiohttp.
 It supports loading agents from uploaded .aia files.
 """
-import os
-import sys
-import asyncio
 import logging
+import mimetypes
+import os
+
 import httpx
 from aiohttp import web
 from botbuilder.core import (
+    ActivityHandler,
     BotFrameworkAdapter,
     BotFrameworkAdapterSettings,
     TurnContext,
-    ActivityHandler,
 )
-from botbuilder.schema import Activity, ActivityTypes
-from pinionai import AsyncPinionAIClient
-from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
+from botbuilder.schema import Activity, ActivityTypes, Attachment
+from dotenv import load_dotenv
+
 from agent_selection import (
     get_available_agents,
     merge_agent_capabilities,
     resolve_agent,
 )
-from dotenv import load_dotenv
+from pinionai import AsyncPinionAIClient
+from pinionai.exceptions import PinionAIError
+from pinionai.file_type_detection import is_text_file_type
 
 # Load environment variables
 load_dotenv()
@@ -49,6 +51,35 @@ sessions = {}
 
 # State management for private AIA files: conversation_id -> { "file_content": ..., "awaiting_secret": True, "is_merge": False }
 pending_agents = {}
+
+async def send_agent_response(turn_context: TurnContext, content: str, file_type: str) -> None:
+    """Send readable responses as text and file URLs as Teams attachments."""
+    file_type = file_type or "text/plain"
+    if content.startswith(("http://", "https://")) and (
+        not is_text_file_type(file_type) or file_type == "text/csv"
+    ):
+        filename = os.path.basename(content.split("?", 1)[0]) or "response"
+        if not os.path.splitext(filename)[1]:
+            extension = mimetypes.guess_extension(file_type) or ""
+            filename = f"{filename}{extension}"
+        attachment = Attachment(
+            content_type=file_type,
+            content_url=content,
+            name=filename,
+        )
+        await turn_context.send_activity(
+            Activity(type=ActivityTypes.message, attachments=[attachment])
+        )
+        return
+
+    if is_text_file_type(file_type):
+        await turn_context.send_activity(content)
+        return
+
+    await turn_context.send_activity(
+        f"Received a {file_type} file response, but it is not available as a URL for Teams."
+    )
+
 
 async def get_client(conversation_id: str) -> AsyncPinionAIClient:
     """Gets or initializes the PinionAI client for a given conversation."""
@@ -281,14 +312,14 @@ class PinionAIBot(ActivityHandler):
             p_client.add_message_to_history("user", text)
             
             # AI Processing
-            response_text = await p_client.process_user_input(text, sender="user")
-            await turn_context.send_activity(response_text)
+            response_text, response_file_type = await p_client.process_user_input(text, sender="user")
+            await send_agent_response(turn_context, response_text, response_file_type)
             await p_client.update_pinion_session()
             
             # Handle follow-up intents
             while p_client.next_intent:
-                follow_up = await p_client.process_user_input("", sender="user")
-                await turn_context.send_activity(follow_up)
+                follow_up, follow_up_file_type = await p_client.process_user_input("", sender="user")
+                await send_agent_response(turn_context, follow_up, follow_up_file_type)
                 await p_client.update_pinion_session()
                  
         except PinionAIError as e:

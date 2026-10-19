@@ -1,13 +1,18 @@
-import streamlit as st
-import os
-import time
 import asyncio
-from io import StringIO
-from pinionai import AsyncPinionAIClient
-from pinionai.exceptions import PinionAIConfigurationError, PinionAIError
-from agent_selection import get_available_agents, merge_agent_capabilities
+import os
 import threading
+import time
+from io import StringIO
+
+import streamlit as st
 from dotenv import load_dotenv
+
+from agent_selection import get_available_agents, merge_agent_capabilities
+from chat_rendering import render_response
+from pinionai import AsyncPinionAIClient
+from pinionai.exceptions import PinionAIConfigurationError
+from pinionai.file_type_detection import is_text_file_type
+
 load_dotenv()
 
 def run_coroutine_in_event_loop(coroutine):
@@ -29,7 +34,7 @@ def display_chat_messages(messages,user_img,assistant_img):
         for message in messages:
             avatar = user_img if message["role"] == "user" else assistant_img
             with st.chat_message(message["role"], avatar=avatar):
-                st.markdown(message["content"])
+                render_response(message["content"], message.get("file_type", "text/plain"))
 
 def poll_for_updates(client: AsyncPinionAIClient, timeout: int, http_poll_start: int = 30, http_poll_interval: int = 5):
     """Polls for updates and returns True if a rerun is needed."""
@@ -83,7 +88,7 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.4.5`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.4.1`'
     },
     layout="wide"
 )
@@ -163,7 +168,7 @@ if not os.environ.get("agent_id"):
                     st.rerun()
         st.stop()
     else:
-        with st.form(f"agent_file"):
+        with st.form("agent_file"):
             uploaded_file = st.file_uploader("Upload AIA agent file or shortcut", type="aia", accept_multiple_files=False,
                                             help="Select the File version of the agent to test.")
             col_b1, col_b2 = st.columns(2)
@@ -478,12 +483,14 @@ if input_text is not None:
     else: # AI AGENT MODE
         with st.chat_message("assistant", avatar=assistant_img):
             with st.spinner("Thinking..."):
-                full_ai_response_string = run_coroutine_in_event_loop(client.process_user_input(input_text, sender="user"))
-                st.markdown(full_ai_response_string)
+                full_ai_response_string, full_ai_file_type = run_coroutine_in_event_loop(
+                    client.process_user_input(input_text, sender="user")
+                )
+                render_response(full_ai_response_string, full_ai_file_type)
             # The client's process_user_input method already adds the assistant's response to its chat_messages
             run_coroutine_in_event_loop(client.update_pinion_session())
             
-            if var.get("ttsAudio"):
+            if var.get("ttsAudio") and is_text_file_type(full_ai_file_type):
                 with st.spinner("Generating audio..."):
                     try:
                         audio_bytes = run_coroutine_in_event_loop(client.convert_text_to_audio(full_ai_response_string))
@@ -503,11 +510,13 @@ if input_text is not None:
                 with st.chat_message("assistant", avatar=assistant_img):
                     with st.spinner("Thinking..."):
                         # Process the next_intent (user_input might be empty or the next_intent itself)
-                        full_next_intent_response_string = run_coroutine_in_event_loop(client.process_user_input(user_input="", sender="user"))
-                        st.markdown(full_next_intent_response_string)
+                        full_next_intent_response_string, full_next_intent_file_type = run_coroutine_in_event_loop(
+                            client.process_user_input(user_input="", sender="user")
+                        )
+                        render_response(full_next_intent_response_string, full_next_intent_file_type)
                     run_coroutine_in_event_loop(client.update_pinion_session())
 
-                    if var.get("ttsAudio"):
+                    if var.get("ttsAudio") and is_text_file_type(full_next_intent_file_type):
                         with st.spinner("Generating audio..."):
                             try:
                                 audio_bytes = run_coroutine_in_event_loop(client.convert_text_to_audio(full_next_intent_response_string))
