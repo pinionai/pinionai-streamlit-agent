@@ -1,3 +1,8 @@
+__lazy_modules__ = {
+    "streamlit",
+    "pinionai.file_type_detection",
+}
+
 import csv
 import io
 import mimetypes

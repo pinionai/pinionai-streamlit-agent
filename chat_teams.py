@@ -7,6 +7,12 @@ Usage:
 This client uses botbuilder-core and botbuilder-integration-aiohttp.
 It supports loading agents from uploaded .aia files.
 """
+__lazy_modules__ = {
+    "mimetypes",
+    "httpx",
+    "pinionai.file_type_detection",
+}
+
 import logging
 import mimetypes
 import os

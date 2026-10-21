@@ -2,7 +2,7 @@
 
 ### 1. Build Stage ###
 # Use a slim Python image as the builder
-FROM python:3.14-slim AS builder
+FROM python:3.15-slim AS builder
 
 # Patch packages inherited from the base image.
 # RUN apt-get update && \
@@ -37,7 +37,7 @@ RUN uv pip install --no-cache -r requirements.txt
 RUN python -m compileall /app/.venv
 
 ### 2. Final Stage ###
-FROM python:3.14-slim AS final
+FROM python:3.15-slim AS final
 
 # Patch packages inherited from the base image.
 # RUN apt-get update && \
@@ -47,6 +47,8 @@ FROM python:3.14-slim AS final
 # Ensure bytecode (.pyc files) is utilized at runtime for near-instant startup
 ENV PYTHONDONTWRITEBYTECODE=0
 ENV PYTHONUNBUFFERED=1
+# 3. Opt-in to Python 3.15's upgraded JIT compiler
+ENV PYTHON_JIT=1
 
 # Create a non-root user and group
 RUN addgroup --system --gid 999 appgroup && \

@@ -7,6 +7,13 @@ Usage:
 This client uses slack_bolt (AsyncApp) and interacts via Slack messages.
 It supports loading agents from uploaded .aia files.
 """
+__lazy_modules__ = {
+    "mimetypes",
+    "re",
+    "httpx",
+    "pinionai.file_type_detection",
+}
+
 import asyncio
 import logging
 import mimetypes

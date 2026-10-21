@@ -9,6 +9,10 @@ Controls:
 
 This client uses AsyncPinionAIClient and interacts via stdin/stdout.
 """
+__lazy_modules__ = {
+    "pinionai.file_type_detection",
+}
+
 import argparse
 import asyncio
 import getpass
