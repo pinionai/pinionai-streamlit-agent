@@ -21,7 +21,7 @@ altair==6.3.0
     # via streamlit
 annotated-types==0.8.0
     # via pydantic
-anthropic==1.17.0
+anthropic==2.3.0
     # via pinionai
 anyio==4.15.1
     # via
@@ -74,17 +74,17 @@ botframework-connector==4.17.1
     #   botframework-streaming
 botframework-streaming==4.17.1
     # via botbuilder-core
-boto3==1.43.116
+boto3==1.43.118
     # via pinionai
-botocore==1.43.116
+botocore==1.43.118
     # via
     #   boto3
     #   s3transfer
-cachetools==7.2.4
+cachetools==7.2.5
     # via py-key-value-aio
-caio==0.12.9
+caio==0.12.10
     # via aiofile
-certifi==2026.10.19
+certifi==2026.10.23
     # via
     #   fastmcp-slim
     #   httpcore
@@ -111,7 +111,7 @@ cryptography==50.0.2
     #   pinionai
     #   pyjwt
     #   sendgrid
-cyclopts==5.2.0
+cyclopts==5.3.0
     # via fastmcp-slim
 distro==1.9.0
     # via
@@ -143,7 +143,7 @@ geographiclib==2.1
     # via geopy
 geopy==2.5.0
     # via pinionai-chat
-google-api-core==2.42.0
+google-api-core==2.43.0
     # via
     #   google-cloud-appengine-logging
     #   google-cloud-core
@@ -163,7 +163,7 @@ google-auth==2.62.0
     #   pinionai
 google-cloud-appengine-logging==1.11.0
     # via google-cloud-logging
-google-cloud-audit-log==0.6.2
+google-cloud-audit-log==0.6.3
     # via google-cloud-logging
 google-cloud-core==2.8.0
     # via
@@ -179,21 +179,21 @@ google-crc32c==1.9.0
     # via
     #   google-cloud-storage
     #   google-resumable-media
-google-genai==2.32.0
+google-genai==2.33.0
     # via pinionai
 google-resumable-media==2.11.0
     # via google-cloud-storage
-googleapis-common-protos==1.75.5
+googleapis-common-protos==1.76.0
     # via
     #   google-api-core
     #   google-cloud-audit-log
     #   grpc-google-iam-v1
     #   grpcio-status
-griffelib==2.4.0
+griffelib==2.4.1
     # via fastmcp-slim
-grpc-google-iam-v1==0.14.5
+grpc-google-iam-v1==0.14.6
     # via google-cloud-logging
-grpcio==1.84.0
+grpcio==1.84.1
     # via
     #   google-api-core
     #   google-cloud-appengine-logging
@@ -203,7 +203,7 @@ grpcio==1.84.0
     #   grpc-google-iam-v1
     #   grpcio-status
     #   pinionai
-grpcio-status==1.84.0
+grpcio-status==1.84.1
     # via google-api-core
 h11==0.16.0
     # via
@@ -216,7 +216,7 @@ hpack==4.2.0
     # via h2
 httpcore==1.0.9
     # via httpx
-httpcore2==2.15.1
+httpcore2==2.16.0
     # via httpx2
 httpx==0.28.1
     # via
@@ -225,7 +225,7 @@ httpx==0.28.1
     #   pinionai
     #   pinionai-chat
     #   telnyx
-httpx2==2.15.1
+httpx2==2.16.0
     # via
     #   anthropic
     #   fastmcp-slim
@@ -258,7 +258,7 @@ jinja2==3.1.6
     #   altair
     #   pinionai
     #   pydeck
-jiter==0.17.0
+jiter==0.18.0
     # via
     #   anthropic
     #   openai
@@ -270,7 +270,7 @@ joserfc==1.7.7
     # via
     #   authlib
     #   fastmcp-slim
-jsonpath-ng==1.12.0
+jsonpath-ng==1.13.0
     # via pinionai
 jsonpickle==3.4.2
     # via botbuilder-core
@@ -316,7 +316,7 @@ msrest==0.7.1
     # via
     #   botbuilder-schema
     #   botframework-connector
-multidict==7.1.0
+multidict==7.2.1
     # via
     #   aiohttp
     #   yarl
@@ -329,7 +329,7 @@ numpy==2.5.4
     #   streamlit
 oauthlib==4.0.0
     # via requests-oauthlib
-openai==3.35.1
+openai==3.37.0
     # via pinionai
 openapi-pydantic==0.6.0
     # via fastmcp-slim
@@ -345,7 +345,7 @@ packaging==26.3
     #   altair
     #   fastmcp-slim
     #   streamlit
-pandas==3.0.6
+pandas==3.1.0
     # via
     #   pinionai
     #   streamlit
@@ -353,11 +353,11 @@ paramiko==5.1.0
     # via pinionai
 pathable==0.6.0
     # via jsonschema-path
-pillow==12.3.0
+pillow==13.0.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.4.7
+pinionai==0.4.8
     # via pinionai-chat
 platformdirs==4.13.5
     # via fastmcp-slim
@@ -404,7 +404,7 @@ pyasn1==0.6.4
     # via pyasn1-modules
 pyasn1-modules==0.4.2
     # via google-auth
-pycparser==3.11
+pycparser==3.12
     # via cffi
 pydantic==2.14.1
     # via
@@ -510,19 +510,19 @@ sniffio==1.3.1
     #   google-genai
     #   openai
     #   telnyx
-sse-starlette==3.5.0
+sse-starlette==3.6.0
     # via mcp
-starlette==1.9.0
+starlette==1.10.0
     # via
     #   fastmcp-slim
     #   mcp
     #   sse-starlette
     #   streamlit
-streamlit==1.66.0
+streamlit==1.66.1
     # via pinionai-chat
 streamlit-pdf==2.1.0
     # via streamlit
-telnyx==4.186.0
+telnyx==4.189.0
     # via pinionai
 tenacity==9.1.4
     # via google-genai
@@ -572,7 +572,7 @@ uvicorn==0.54.0
     #   streamlit
 watchfiles==1.3.0
     # via fastmcp-slim
-websockets==16.1.1
+websockets==17.3
     # via
     #   fastmcp-slim
     #   google-genai
