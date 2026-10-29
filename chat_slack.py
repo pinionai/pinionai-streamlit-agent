@@ -54,6 +54,9 @@ app = AsyncApp(token=SLACK_BOT_TOKEN)
 # Session management: channel_id -> AsyncPinionAIClient
 sessions = {}
 
+# Channel language preferences: channel_id -> language_code (e.g. 'es', 'fr')
+channel_languages: dict[str, str] = {}
+
 # State management for private AIA files: channel_id -> { "file_content": ..., "awaiting_secret": True, "is_merge": False }
 pending_agents = {}
 
@@ -253,12 +256,43 @@ async def handle_message_events(event, say):
 
     # 3. Handle Commands
     if text.lower() in ["/end", "!end"]:
+        channel_languages.pop(channel_id, None)
         if channel_id in sessions:
             await sessions[channel_id].end_grpc_chat_session()
             del sessions[channel_id]
             await say("Conversation ended and session cleared.")
         else:
             await say("No active session to end.")
+        return
+
+    if text.lower() in ["!lang", "!language", "/lang"]:
+        curr = (
+            channel_languages.get(channel_id)
+            or os.environ.get("LANGUAGE")
+            or os.environ.get("language")
+            or (sessions[channel_id].var.get("user_language") if channel_id in sessions else None)
+            or "default (en)"
+        )
+        await say(f"Current language for this channel: `{curr}`.")
+        return
+
+    if text.lower().startswith("!lang ") or text.lower().startswith("!language ") or text.lower().startswith("/lang "):
+        parts = text.split(maxsplit=1)
+        val = parts[1].strip() if len(parts) > 1 else ""
+        if val.lower() in ("none", "off", "reset", "clear", "en", "default"):
+            channel_languages.pop(channel_id, None)
+            if channel_id in sessions:
+                sessions[channel_id].var.pop("user_language", None)
+            await say("Language translation reset to default (English core).")
+        elif val:
+            lang_code = val.lower()
+            channel_languages[channel_id] = lang_code
+            if channel_id in sessions:
+                sessions[channel_id].var["user_language"] = lang_code
+            await say(f"Language for this channel set to: `{lang_code}`.")
+        else:
+            curr = channel_languages.get(channel_id) or "default (en)"
+            await say(f"Current language: `{curr}`.")
         return
 
     if text.lower() == "!agents":
@@ -347,15 +381,25 @@ async def handle_message_events(event, say):
         
         # In Slack, we don't have a 'spinner', so we can optionally send a 'typing' indicator or just wait.
         # Socket Mode doesn't support easy typing indicators via this API, so we just process.
+        channel_lang = (
+            channel_languages.get(channel_id)
+            or os.environ.get("LANGUAGE")
+            or os.environ.get("language")
+            or p_client.var.get("user_language")
+        )
         
         # AI Processing
-        response_text, response_file_type = await p_client.process_user_input(text, sender="user")
+        response_text, response_file_type = await p_client.process_user_input(
+            text, sender="user", language=channel_lang
+        )
         await send_agent_response(channel_id, say, response_text, response_file_type)
         await p_client.update_pinion_session()
         
         # Handle follow-up intents
         while p_client.next_intent:
-            follow_up, follow_up_file_type = await p_client.process_user_input("", sender="user")
+            follow_up, follow_up_file_type = await p_client.process_user_input(
+                "", sender="user", language=channel_lang
+            )
             await send_agent_response(channel_id, say, follow_up, follow_up_file_type)
             await p_client.update_pinion_session()
              

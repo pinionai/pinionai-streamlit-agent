@@ -12,7 +12,7 @@ from io import StringIO
 import streamlit as st
 from dotenv import load_dotenv
 
-from agent_selection import get_available_agents, merge_agent_capabilities
+from agent_selection import get_available_agents, merge_agent_capabilities, switch_agent_capabilities
 from chat_rendering import render_response
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError
@@ -93,7 +93,7 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.4.8`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.4.9`'
     },
     layout="wide"
 )
@@ -102,17 +102,24 @@ if 'awaiting_key_secret' not in st.session_state:
     st.session_state.awaiting_key_secret = False
 if 'merging_aia' not in st.session_state:
     st.session_state.merging_aia = False
+if 'switching_aia' not in st.session_state:
+    st.session_state.switching_aia = False
 if 'uploaded_file_bytes' not in st.session_state:
     st.session_state.uploaded_file_bytes = None
 
 if not os.environ.get("agent_id"):
-    if st.session_state.awaiting_key_secret or st.session_state.get("merging_aia"):
+    if st.session_state.awaiting_key_secret or st.session_state.get("merging_aia") or st.session_state.get("switching_aia"):
         st.warning("This AIA file is private and requires a secret key to decrypt.")
         with st.form("key_secret_form"):
             key_secret = st.text_input("Enter the secret key:", type="password")
             col1, col2 = st.columns(2)
             with col1:
-                button_label = "Unlock and Merge Agent" if st.session_state.get("merging_aia") else "Unlock and Load Agent"
+                if st.session_state.get("merging_aia"):
+                    button_label = "Unlock and Merge Agent"
+                elif st.session_state.get("switching_aia"):
+                    button_label = "Unlock and Switch Agent"
+                else:
+                    button_label = "Unlock and Start Agent"
                 if st.form_submit_button(button_label, width="stretch"):
                     if not key_secret:
                         st.error("Please enter a secret key.")
@@ -136,6 +143,25 @@ if not os.environ.get("agent_id"):
                                         st.error(result_msg)
                                 except Exception as e:
                                     st.error(f"Merge failed: {e}")
+                        elif st.session_state.get("switching_aia"):
+                            with st.spinner("Decrypting and switching agent..."):
+                                try:
+                                    file_bytes = st.session_state.uploaded_file_bytes
+                                    stringio = StringIO(file_bytes.decode("utf-8"))
+                                    result_msg = run_coroutine_in_event_loop(st.session_state.pinion_client.switch_agent_from_aia(
+                                        file_stream=stringio.read(),
+                                        key_secret=key_secret
+                                    ))
+                                    if "Error" not in result_msg:
+                                        st.session_state.switching_aia = False
+                                        st.session_state.uploaded_file_bytes = None
+                                        st.success(result_msg)
+                                        time.sleep(1)
+                                        st.rerun()
+                                    else:
+                                        st.error(result_msg)
+                                except Exception as e:
+                                    st.error(f"Switch failed: {e}")
                         else:
                             # Clear main session state before loading new agent
                             keys_to_keep = ["logged_in", "user_login", "user_email", "accountSelectedUId", "accountPermissions", "awaiting_key_secret", "uploaded_file_bytes"]
@@ -169,6 +195,7 @@ if not os.environ.get("agent_id"):
                     # Clean up temp state and go back
                     st.session_state.awaiting_key_secret = False
                     st.session_state.merging_aia = False
+                    st.session_state.switching_aia = False
                     st.session_state.uploaded_file_bytes = None
                     st.rerun()
         st.stop()
@@ -176,9 +203,9 @@ if not os.environ.get("agent_id"):
         with st.form("agent_file"):
             uploaded_file = st.file_uploader("Upload AIA agent file or shortcut", type="aia", accept_multiple_files=False,
                                             help="Select the File version of the agent to test.")
-            col_b1, col_b2 = st.columns(2)
+            col_b1, col_b2, col_b3 = st.columns(3)
             with col_b1:
-                if st.form_submit_button("Load AIA Agent", help="Reset the test agent and clear the chat history."):
+                if st.form_submit_button("Start AIA Agent", help="Reset the test agent and start a fresh session."):
                     if uploaded_file is None:
                         st.error("Please upload an agent file first.")
                         st.stop()
@@ -203,7 +230,7 @@ if not os.environ.get("agent_id"):
                                 st.session_state.pinion_client = client
                                 st.rerun() # Rerun to load the new agent's chat
                             else:
-                                st.error(f"Failed to load agent: {init_message}")
+                                st.error(f"Failed to start agent: {init_message}")
                                 st.stop()
                         except Exception as e:
                             st.error(f"Failed to initialize PinionAI client from AIA file: {e}")
@@ -212,6 +239,31 @@ if not os.environ.get("agent_id"):
                     st.info("Please upload an AIA file or shortcut.")
                     st.stop()
             with col_b2:
+                if st.form_submit_button("Switch AIA Agent", help="Switch to this agent's capabilities while preserving existing session variables and chat history."):
+                    if uploaded_file is None:
+                        st.error("Please upload an agent file first.")
+                    elif "pinion_client" not in st.session_state:
+                        st.error("No active session to switch.")
+                    else:
+                        try:
+                            file_bytes = uploaded_file.getvalue()
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            result_msg = run_coroutine_in_event_loop(st.session_state.pinion_client.switch_agent_from_aia(
+                                file_stream=stringio.read()
+                            ))
+                            if result_msg == 'key_secret required for private version':
+                                st.session_state.switching_aia = True
+                                st.session_state.uploaded_file_bytes = file_bytes
+                                st.rerun()
+                            elif "Error" not in result_msg:
+                                st.success(result_msg)
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(result_msg)
+                        except Exception as e:
+                            st.error(f"Switch analysis failed: {e}")
+            with col_b3:
                 if st.form_submit_button("Add AIA Agent", help="Add this AIA file's capabilities to your current session."):
                     if uploaded_file is None:
                         st.error("Please upload an agent file first.")
@@ -295,9 +347,17 @@ if st.session_state.pinion_client:
                         format_func=lambda uid: agent_by_uid[uid]["agent_name"],
                         key="selected_agent_uid",
                     )
-                    load_agent_col, merge_agent_col = st.columns(2)
-                    with load_agent_col:
-                        load_agent = st.form_submit_button("Load agent")
+                    start_agent_col, switch_agent_col, merge_agent_col = st.columns(3)
+                    with start_agent_col:
+                        start_agent = st.form_submit_button(
+                            "Start agent",
+                            help="Start fresh with this agent, resetting conversation history and session variables.",
+                        )
+                    with switch_agent_col:
+                        switch_agent = st.form_submit_button(
+                            "Switch agent",
+                            help="Switch to this agent's behavior and intents while retaining current conversation variables.",
+                        )
                     with merge_agent_col:
                         merge_agent = st.form_submit_button(
                             "Merge agent",
@@ -309,18 +369,20 @@ if st.session_state.pinion_client:
                         "Upload AIA agent file or shortcut",
                         type="aia",
                         accept_multiple_files=False,
-                        help="Load or merge a saved PinionAI AIA agent into this session.",
+                        help="Start, switch, or merge a saved PinionAI AIA agent into this session.",
                     )
-                    load_aia_col, merge_aia_col = st.columns(2)
-                    with load_aia_col:
-                        load_aia_file = st.form_submit_button("Load AIA")
+                    start_aia_col, switch_aia_col, merge_aia_col = st.columns(3)
+                    with start_aia_col:
+                        start_aia_file = st.form_submit_button("Start AIA", help="Start fresh with this AIA file.")
+                    with switch_aia_col:
+                        switch_aia_file = st.form_submit_button("Switch AIA", help="Switch to this AIA agent retaining current variables.")
                     with merge_aia_col:
-                        merge_aia_file = st.form_submit_button("Merge AIA")
+                        merge_aia_file = st.form_submit_button("Merge AIA", help="Merge this AIA agent capabilities additively.")
 
-                if load_agent:
+                if start_agent:
                     if selected_agent_uid != getattr(client, "_agent_id", None):
                         try:
-                            with st.spinner("Loading agent..."):
+                            with st.spinner("Starting agent..."):
                                 new_client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
                                     agent_id=selected_agent_uid,
                                     host_url=os.environ.get("host_url"),
@@ -336,9 +398,30 @@ if st.session_state.pinion_client:
                                 st.session_state.end_chat_clicked = False
                                 st.rerun()
                         except Exception as e:
-                            st.error(f"Failed to load selected agent: {e}")
+                            st.error(f"Failed to start selected agent: {e}")
                     else:
                         st.info("This agent is already loaded.")
+                if switch_agent:
+                    if selected_agent_uid != getattr(client, "_agent_id", None):
+                        try:
+                            with st.spinner("Switching agent..."):
+                                run_coroutine_in_event_loop(switch_agent_capabilities(
+                                    client,
+                                    selected_agent_uid,
+                                    host_url=os.environ.get("host_url"),
+                                    client_id=os.environ.get("client_id"),
+                                    client_secret=os.environ.get("client_secret"),
+                                    version=os.environ.get("version", None),
+                                ))
+                            st.success(
+                                f"Switched to agent: {agent_by_uid[selected_agent_uid]['agent_name']}. Existing session variables preserved."
+                            )
+                            time.sleep(1)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to switch to selected agent: {e}")
+                    else:
+                        st.info("This agent is already active.")
                 if merge_agent:
                     try:
                         with st.spinner("Merging agent capabilities..."):
@@ -358,9 +441,9 @@ if st.session_state.pinion_client:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Failed to merge selected agent: {e}")
-                if load_aia_file:
+                if start_aia_file:
                     if uploaded_aia is None:
-                        st.error("Please upload an AIA file to load first.")
+                        st.error("Please upload an AIA file to start first.")
                     else:
                         keys_to_delete = [key for key in st.session_state.keys()]
                         for key in keys_to_delete:
@@ -377,6 +460,7 @@ if st.session_state.pinion_client:
                                 st.session_state.awaiting_key_secret = True
                                 st.session_state.uploaded_file_bytes = file_bytes
                                 st.session_state.merging_aia = False
+                                st.session_state.switching_aia = False
                                 st.rerun()
                             elif new_client:
                                 st.session_state.pinion_client = new_client
@@ -384,9 +468,34 @@ if st.session_state.pinion_client:
                                 st.session_state.uploaded_file_bytes = None
                                 st.rerun()
                             else:
-                                st.error(f"Failed to load agent: {init_message}")
+                                st.error(f"Failed to start agent: {init_message}")
                         except Exception as e:
                             st.error(f"Failed to initialize PinionAI client from AIA file: {e}")
+                if switch_aia_file:
+                    if uploaded_aia is None:
+                        st.error("Please upload an AIA file to switch to first.")
+                    elif "pinion_client" not in st.session_state:
+                        st.error("No active session to switch.")
+                    else:
+                        try:
+                            file_bytes = uploaded_aia.getvalue()
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            result_msg = run_coroutine_in_event_loop(st.session_state.pinion_client.switch_agent_from_aia(
+                                file_stream=stringio.read()
+                            ))
+                            if result_msg == 'key_secret required for private version':
+                                st.session_state.merging_aia = False
+                                st.session_state.switching_aia = True
+                                st.session_state.uploaded_file_bytes = file_bytes
+                                st.rerun()
+                            elif "Error" not in result_msg:
+                                st.success(result_msg)
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error(result_msg)
+                        except Exception as e:
+                            st.error(f"Switch analysis failed: {e}")
                 if merge_aia_file:
                     if uploaded_aia is None:
                         st.error("Please upload an AIA file to merge first.")
@@ -437,6 +546,32 @@ with col1:
 with col2:
     st.image(assistant_img)
 st.write(var["agentSubtitle"])
+
+# --- Language Configuration ---
+default_lang = (
+    st.query_params.get("language")
+    or st.query_params.get("lang")
+    or st.query_params.get("locale")
+    or os.environ.get("LANGUAGE")
+    or os.environ.get("language")
+    or var.get("user_language")
+    or ""
+)
+if "user_language" not in st.session_state:
+    st.session_state.user_language = default_lang
+
+with st.sidebar:
+    st.subheader("Language Settings")
+    user_lang_input = st.text_input(
+        "Language Code (e.g., 'es', 'fr', 'de')",
+        value=st.session_state.user_language,
+        help="Specify language code for inbound and outbound translation. Leave blank for default English core.",
+    ).strip().lower()
+    st.session_state.user_language = user_lang_input
+
+active_language = st.session_state.user_language or None
+if active_language:
+    client.var["user_language"] = active_language
 
 if var["transferAllowed"]:
     with st.form(f"chat_status_form_{client.session_id or 'nosession'}"):
@@ -489,7 +624,7 @@ if input_text is not None:
         with st.chat_message("assistant", avatar=assistant_img):
             with st.spinner("Thinking..."):
                 full_ai_response_string, full_ai_file_type = run_coroutine_in_event_loop(
-                    client.process_user_input(input_text, sender="user")
+                    client.process_user_input(input_text, sender="user", language=active_language)
                 )
                 render_response(full_ai_response_string, full_ai_file_type)
             # The client's process_user_input method already adds the assistant's response to its chat_messages
@@ -516,7 +651,7 @@ if input_text is not None:
                     with st.spinner("Thinking..."):
                         # Process the next_intent (user_input might be empty or the next_intent itself)
                         full_next_intent_response_string, full_next_intent_file_type = run_coroutine_in_event_loop(
-                            client.process_user_input(user_input="", sender="user")
+                            client.process_user_input(user_input="", sender="user", language=active_language)
                         )
                         render_response(full_next_intent_response_string, full_next_intent_file_type)
                     run_coroutine_in_event_loop(client.update_pinion_session())

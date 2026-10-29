@@ -75,6 +75,32 @@ async def merge_agent_capabilities(
         await source_client.close()
 
 
+async def switch_agent_capabilities(
+    client,
+    agent_id,
+    *,
+    host_url,
+    client_id,
+    client_secret,
+    version=None,
+):
+    """Switch another account agent's version capabilities into an active client while retaining session variables."""
+    source_client = await AsyncPinionAIClient.create(
+        agent_id=agent_id,
+        host_url=host_url,
+        client_id=client_id,
+        client_secret=client_secret,
+        version=version,
+    )
+    try:
+        version_data = await source_client.get_pinionai_version_info()
+        if not version_data:
+            raise ValueError("The selected agent did not return version information.")
+        return await client.switch_agent(version_data)
+    finally:
+        await source_client.close()
+
+
 def resolve_agent(agents, identifier):
     """Find an agent by UID or case-insensitive name."""
     normalized_identifier = identifier.strip().casefold()

@@ -74,13 +74,13 @@ botframework-connector==4.17.1
     #   botframework-streaming
 botframework-streaming==4.17.1
     # via botbuilder-core
-boto3==1.43.119
+boto3==1.43.121
     # via pinionai
-botocore==1.43.119
+botocore==1.43.121
     # via
     #   boto3
     #   s3transfer
-cachetools==7.2.6
+cachetools==7.2.7
     # via py-key-value-aio
 caio==0.12.10
     # via aiofile
@@ -111,7 +111,7 @@ cryptography==50.0.2
     #   pinionai
     #   pyjwt
     #   sendgrid
-cyclopts==5.3.1
+cyclopts==5.3.2
     # via fastmcp-slim
 distro==1.9.0
     # via
@@ -143,7 +143,7 @@ geographiclib==2.1
     # via geopy
 geopy==2.5.0
     # via pinionai-chat
-google-api-core==2.43.0
+google-api-core==2.43.1
     # via
     #   google-cloud-appengine-logging
     #   google-cloud-core
@@ -308,7 +308,7 @@ multidict==7.2.1
     # via
     #   aiohttp
     #   yarl
-narwhals==2.27.1
+narwhals==2.28.0
     # via altair
 numpy==2.5.4
     # via
@@ -317,7 +317,7 @@ numpy==2.5.4
     #   streamlit
 oauthlib==4.0.0
     # via requests-oauthlib
-openai==3.39.0
+openai==3.41.0
     # via pinionai
 openapi-pydantic==0.6.0
     # via fastmcp-slim
@@ -345,9 +345,9 @@ pillow==13.0.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.4.8
+pinionai==0.4.9
     # via pinionai-chat
-platformdirs==4.13.5
+platformdirs==4.14.0
     # via fastmcp-slim
 propcache==0.5.4
     # via
@@ -388,7 +388,7 @@ py-key-value-aio==0.4.6
     # via fastmcp-slim
 pyarrow==26.0.0
     # via streamlit
-pyasn1==0.6.4
+pyasn1==0.6.5
     # via pyasn1-modules
 pyasn1-modules==0.4.2
     # via google-auth
@@ -407,7 +407,7 @@ pydantic==2.14.1
     #   telnyx
 pydantic-core==2.50.1
     # via pydantic
-pydantic-settings==2.16.1
+pydantic-settings==2.16.2
     # via fastmcp-slim
 pydeck==0.9.3
     # via streamlit
@@ -510,7 +510,7 @@ streamlit==1.66.1
     # via pinionai-chat
 streamlit-pdf==2.1.0
     # via streamlit
-telnyx==4.189.0
+telnyx==4.190.0
     # via pinionai
 tenacity==9.1.4
     # via google-genai

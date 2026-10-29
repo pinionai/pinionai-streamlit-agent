@@ -112,7 +112,7 @@ def cleanup_client(client: AsyncPinionAIClient):
     except Exception as e:
         print(f"Warning: Error closing HTTP session: {e}")
 
-def select_agent_interactively(client: AsyncPinionAIClient, default_agent_id: str, url_params: Optional[str] = None):
+def select_agent_interactively(client: AsyncPinionAIClient, default_agent_id: str, url_params: str | None = None):
     """Offer account agents in the terminal, retaining the configured agent by default."""
     try:
         agents = run_coroutine_in_event_loop(get_available_agents(client))
@@ -176,10 +176,23 @@ def main():
         default=None,
         help="URL parameters to pass to the agent (e.g. '?email=alan@pinionai.com&table=12&vin=500000343' or 'email=alan@pinionai.com')."
     )
+    parser.add_argument(
+        "-l", "--language", "--lang",
+        dest="language",
+        type=str,
+        default=None,
+        help="Language code for translation (e.g. 'es', 'fr', 'de')."
+    )
     # You might have other arguments, keep them here
     # parser.add_argument(...) 
     args = parser.parse_args()
     cli_url_params = args.url_params or os.environ.get("URL_PARAMS") or os.environ.get("url_params")
+    cli_language = (
+        args.language
+        or os.environ.get("LANGUAGE")
+        or os.environ.get("language")
+        or None
+    )
 
     def load_agent_from_aia_path(path: str):
         """Load an agent from a .aia file path. Returns client or None."""
@@ -270,6 +283,11 @@ def main():
                 return
 
     var = client.var
+    if cli_language:
+        client.var["user_language"] = cli_language
+    elif client.var.get("user_language"):
+        cli_language = client.var.get("user_language")
+
     print(var.get("agentTitle"),"PinionAI Terminal Chat")
     print(var.get("agentSubtitle"))
     print("Type your message and press Enter.")
@@ -278,6 +296,7 @@ def main():
     print("  /add <path>  - merge an AIA agent into the current session")
     print("  /merge <name or uid> - merge an available account agent into this session")
     print("  /agents      - list available account agents")
+    print("  /lang [code] - view or set language code (e.g. 'es', 'fr', or 'none')")
     print("  /end         - end chat session and exit")
     print("  /continue    - continue polling or force refresh")
     
@@ -312,6 +331,27 @@ def main():
             # show any new messages
             if poll_for_updates(client, timeout=5):
                 display_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
+            continue
+
+        if trimmed_prompt == "/lang" or trimmed_prompt == "/language":
+            print(f"Current language: {cli_language or client.var.get('user_language') or 'default (en)'}")
+            continue
+
+        if trimmed_prompt.startswith("/lang ") or trimmed_prompt.startswith("/language "):
+            parts = prompt.strip().split(maxsplit=1)
+            val = parts[1].strip() if len(parts) > 1 else ""
+            if val.lower() in ("none", "off", "reset", "clear", "en", "default"):
+                cli_language = None
+                if client:
+                    client.var.pop("user_language", None)
+                print("Language translation disabled (English core).")
+            elif val:
+                cli_language = val.lower()
+                if client:
+                    client.var["user_language"] = cli_language
+                print(f"Language set to: {cli_language}")
+            else:
+                print(f"Current language: {cli_language or client.var.get('user_language') or 'default (en)'}")
             continue
 
         if trimmed_prompt == "/agents" or trimmed_prompt == "/merge" or trimmed_prompt.startswith("/merge "):
@@ -437,14 +477,14 @@ def main():
             # AI flow
             try:
                 full_ai_response_string, full_ai_file_type = run_coroutine_in_event_loop(
-                    client.process_user_input(prompt, sender="user")
+                    client.process_user_input(prompt, sender="user", language=cli_language)
                 )
                 print_agent_response("Agent: ", full_ai_response_string, full_ai_file_type)
                 run_coroutine_in_event_loop(client.update_pinion_session())
 
                 while client.next_intent:
                     follow_up_response, follow_up_file_type = run_coroutine_in_event_loop(
-                        client.process_user_input("", sender="user")
+                        client.process_user_input("", sender="user", language=cli_language)
                     )
                     print_agent_response(
                         "Agent (follow-up): ", follow_up_response, follow_up_file_type

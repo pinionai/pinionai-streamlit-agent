@@ -55,6 +55,9 @@ ADAPTER = BotFrameworkAdapter(SETTINGS)
 # Session management: conversation_id -> AsyncPinionAIClient
 sessions = {}
 
+# Conversation language preferences: conversation_id -> language_code (e.g. 'es', 'fr')
+conversation_languages: dict[str, str] = {}
+
 # State management for private AIA files: conversation_id -> { "file_content": ..., "awaiting_secret": True, "is_merge": False }
 pending_agents = {}
 
@@ -222,13 +225,45 @@ class PinionAIBot(ActivityHandler):
             return
 
         # 3. Handle Commands
-        if text.lower() == "/end":
+        if text.lower() in ["/end", "!end"]:
+            conversation_languages.pop(conversation_id, None)
             if conversation_id in sessions:
                 await sessions[conversation_id].end_grpc_chat_session()
                 del sessions[conversation_id]
                 await turn_context.send_activity("Conversation ended and session cleared.")
             else:
                 await turn_context.send_activity("No active session to end.")
+            return
+
+        if text.lower() in ["!lang", "!language", "/lang"]:
+            curr = (
+                conversation_languages.get(conversation_id)
+                or getattr(turn_context.activity, "locale", None)
+                or os.environ.get("LANGUAGE")
+                or os.environ.get("language")
+                or (sessions[conversation_id].var.get("user_language") if conversation_id in sessions else None)
+                or "default (en)"
+            )
+            await turn_context.send_activity(f"Current language for this conversation: **{curr}**.")
+            return
+
+        if text.lower().startswith("!lang ") or text.lower().startswith("!language ") or text.lower().startswith("/lang "):
+            parts = text.split(maxsplit=1)
+            val = parts[1].strip() if len(parts) > 1 else ""
+            if val.lower() in ("none", "off", "reset", "clear", "en", "default"):
+                conversation_languages.pop(conversation_id, None)
+                if conversation_id in sessions:
+                    sessions[conversation_id].var.pop("user_language", None)
+                await turn_context.send_activity("Language translation reset to default (English core).")
+            elif val:
+                lang_code = val.lower()
+                conversation_languages[conversation_id] = lang_code
+                if conversation_id in sessions:
+                    sessions[conversation_id].var["user_language"] = lang_code
+                await turn_context.send_activity(f"Language for this conversation set to: **{lang_code}**.")
+            else:
+                curr = conversation_languages.get(conversation_id) or "default (en)"
+                await turn_context.send_activity(f"Current language: **{curr}**.")
             return
 
         if text.lower() == "!agents":
@@ -317,14 +352,28 @@ class PinionAIBot(ActivityHandler):
         try:
             p_client.add_message_to_history("user", text)
             
+            # Resolve language: command override -> Teams activity locale -> environment -> agent var
+            locale_lang = getattr(turn_context.activity, "locale", None)
+            conv_lang = (
+                conversation_languages.get(conversation_id)
+                or locale_lang
+                or os.environ.get("LANGUAGE")
+                or os.environ.get("language")
+                or p_client.var.get("user_language")
+            )
+
             # AI Processing
-            response_text, response_file_type = await p_client.process_user_input(text, sender="user")
+            response_text, response_file_type = await p_client.process_user_input(
+                text, sender="user", language=conv_lang
+            )
             await send_agent_response(turn_context, response_text, response_file_type)
             await p_client.update_pinion_session()
             
             # Handle follow-up intents
             while p_client.next_intent:
-                follow_up, follow_up_file_type = await p_client.process_user_input("", sender="user")
+                follow_up, follow_up_file_type = await p_client.process_user_input(
+                    "", sender="user", language=conv_lang
+                )
                 await send_agent_response(turn_context, follow_up, follow_up_file_type)
                 await p_client.update_pinion_session()
                  
