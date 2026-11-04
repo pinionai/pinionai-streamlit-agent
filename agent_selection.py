@@ -28,6 +28,7 @@ async def get_available_agents(client):
             client_id=client_id,
             client_secret=client_secret,
             version=os.environ.get("version", None),
+            url_params=getattr(client, "_url_params", None),
         )
         close_directory_client = True
 
@@ -57,6 +58,7 @@ async def merge_agent_capabilities(
     client_id,
     client_secret,
     version=None,
+    url_params=None,
 ):
     """Merge another account agent's version capabilities into an active client."""
     source_client = await AsyncPinionAIClient.create(
@@ -65,6 +67,7 @@ async def merge_agent_capabilities(
         client_id=client_id,
         client_secret=client_secret,
         version=version,
+        url_params=url_params,
     )
     try:
         version_data = await source_client.get_pinionai_version_info()
@@ -83,6 +86,7 @@ async def switch_agent_capabilities(
     client_id,
     client_secret,
     version=None,
+    url_params=None,
 ):
     """Switch another account agent's version capabilities into an active client while retaining session variables."""
     source_client = await AsyncPinionAIClient.create(
@@ -91,6 +95,7 @@ async def switch_agent_capabilities(
         client_id=client_id,
         client_secret=client_secret,
         version=version,
+        url_params=url_params,
     )
     try:
         version_data = await source_client.get_pinionai_version_info()

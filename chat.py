@@ -93,7 +93,7 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.4.9`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.5.0`'
     },
     layout="wide"
 )
@@ -529,8 +529,9 @@ if "end_chat_clicked" not in st.session_state:
     st.session_state.end_chat_clicked = False
 
 try:
-    assistant_img = var["assistImage"]
-    user_img = var["userImage"]
+    # An agent without images gets Streamlit's default avatars; an empty string is not a valid image
+    assistant_img = var["assistImage"] or None
+    user_img = var["userImage"] or None
 except KeyError as e:
     st.error(f"Error loading image URLs from agent configuration: Missing key {e}. Agent configuration might be incomplete.")
     st.stop()
@@ -544,7 +545,8 @@ col1, col2 = st.columns([8, 1])
 with col1:
     st.header(var["agentTitle"], divider=var["accentColor"])
 with col2:
-    st.image(assistant_img)
+    if assistant_img:
+        st.image(assistant_img)
 st.write(var["agentSubtitle"])
 
 # --- Language Configuration ---
