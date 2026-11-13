@@ -394,7 +394,7 @@ pillow==13.0.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.5.1
+pinionai==0.5.2
     # via pinionai-chat
 platformdirs==4.14.5
     # via fastmcp-slim
