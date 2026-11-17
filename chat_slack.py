@@ -19,6 +19,7 @@ import logging
 import mimetypes
 import os
 import re
+from urllib.parse import urlsplit
 
 import httpx
 from dotenv import load_dotenv
@@ -135,6 +136,23 @@ async def get_client(channel_id: str) -> AsyncPinionAIClient:
             logger.error(f"Failed to auto-initialize client for {channel_id}: {e}")
     
     return None
+
+@app.command("/customer-login")
+async def customer_login_command(ack, body, respond):
+    """Direct users to the HTTPS sign-in UI instead of collecting passwords in Slack."""
+    await ack()
+    channel_id = body.get("channel_id", "")
+    if not channel_id.startswith("D"):
+        await respond("For privacy, customer sign-in is available only in a direct message with this bot.")
+        return
+    portal_url = os.environ.get("PINION_CUSTOMER_PORTAL_URL", "").strip()
+    parsed_url = urlsplit(portal_url)
+    if parsed_url.scheme != "https" or not parsed_url.netloc:
+        await respond("Customer history is not configured. Contact the workspace administrator.")
+        return
+    await respond(
+        f"Sign in securely in the customer portal to view and resume sessions: {portal_url}"
+    )
 
 @app.command("/end")
 async def handle_end_command(ack, body, say):

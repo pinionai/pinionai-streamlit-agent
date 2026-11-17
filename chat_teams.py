@@ -124,10 +124,106 @@ async def get_client(conversation_id: str) -> AsyncPinionAIClient:
     
     return None
 
+def is_personal_conversation(turn_context: TurnContext) -> bool:
+    return getattr(turn_context.activity.conversation, "conversation_type", None) == "personal"
+
+def customer_sessions_message(customer_sessions: list[dict]) -> str:
+    if not customer_sessions:
+        return "No saved customer sessions."
+    lines = ["Your saved sessions:"]
+    for session in customer_sessions[:20]:
+        lines.append(f"- {session.get('name') or 'Untitled session'} ({session['uid']})")
+        if session.get("summary"):
+            lines.append(f"  {session['summary'][:300]}")
+    return "\n".join(lines)
+
+async def send_customer_login_card(turn_context: TurnContext) -> None:
+    card = {
+        "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+        "type": "AdaptiveCard",
+        "version": "1.4",
+        "body": [
+            {"type": "TextBlock", "text": "Customer sign-in", "weight": "Bolder"},
+            {
+                "type": "Input.Text",
+                "id": "identifier",
+                "label": "Phone, email, or customer UID",
+                "isRequired": True,
+                "errorMessage": "Enter your customer identifier.",
+            },
+            {
+                "type": "Input.Text",
+                "id": "password",
+                "label": "Password",
+                "style": "password",
+                "isRequired": True,
+                "errorMessage": "Enter your password.",
+            },
+        ],
+        "actions": [
+            {
+                "type": "Action.Submit",
+                "title": "Sign in",
+                "data": {"action": "customer_login"},
+            }
+        ],
+    }
+    await turn_context.send_activity(
+        Activity(
+            type=ActivityTypes.message,
+            attachments=[
+                Attachment(
+                    content_type="application/vnd.microsoft.card.adaptive",
+                    content=card,
+                )
+            ],
+        )
+    )
+
+async def send_customer_portal_link(turn_context: TurnContext) -> None:
+    portal_url = os.environ.get("PINION_CUSTOMER_PORTAL_URL", "").strip()
+    parsed_url = httpx.URL(portal_url)
+    if parsed_url.scheme != "https" or not parsed_url.host:
+        await turn_context.send_activity(
+            "Customer sign-in is not configured. Contact the workspace administrator."
+        )
+        return
+    await turn_context.send_activity(
+        f"Sign in securely in the customer portal to access session history: {portal_url}"
+    )
+
 class PinionAIBot(ActivityHandler):
     async def on_message_activity(self, turn_context: TurnContext):
         conversation_id = turn_context.activity.conversation.id
         text = turn_context.activity.text.strip() if turn_context.activity.text else ""
+
+        submitted_value = turn_context.activity.value
+        if isinstance(submitted_value, dict) and submitted_value.get("action") == "customer_login":
+            if not is_personal_conversation(turn_context):
+                await turn_context.send_activity("Customer sign-in is available only in a personal chat.")
+                return
+            password = str(submitted_value.get("password") or "")
+            try:
+                p_client = await get_client(conversation_id)
+                if not p_client:
+                    raise RuntimeError("No agent is available for this personal chat.")
+                if p_client.var.get("resumeSessionAuthType", "password") != "password":
+                    await send_customer_portal_link(turn_context)
+                    return
+                await p_client.login_customer(
+                    str(submitted_value.get("identifier") or "").strip(),
+                    password,
+                )
+                customer_sessions = await p_client.list_customer_sessions()
+                await turn_context.send_activity(
+                    "Signed in. This active conversation is linked to your customer account.\n\n"
+                    + customer_sessions_message(customer_sessions)
+                )
+            except Exception as e:
+                await turn_context.send_activity(f"Customer sign-in failed: {e}")
+            finally:
+                password = ""
+            return
         
         # 1. Handle Secret Key for private AIA files
         if conversation_id in pending_agents and pending_agents[conversation_id].get("awaiting_secret"):
@@ -225,6 +321,85 @@ class PinionAIBot(ActivityHandler):
             return
 
         # 3. Handle Commands
+        if text.lower() == "!customer-login":
+            if not is_personal_conversation(turn_context):
+                await turn_context.send_activity("For privacy, customer sign-in is available only in a personal chat.")
+                return
+            p_client = await get_client(conversation_id)
+            if not p_client:
+                await turn_context.send_activity("No agent is available for this personal chat.")
+                return
+            auth_type = p_client.var.get("resumeSessionAuthType", "password")
+            if auth_type == "password":
+                await send_customer_login_card(turn_context)
+            elif auth_type == "phone_otp":
+                await send_customer_portal_link(turn_context)
+            else:
+                await turn_context.send_activity("Customer session history sign-in is disabled for this agent.")
+            return
+
+        if text.lower() == "!customer-sessions":
+            if not is_personal_conversation(turn_context):
+                await turn_context.send_activity("For privacy, session history is available only in a personal chat.")
+                return
+            p_client = sessions.get(conversation_id)
+            if not p_client or not p_client._customer_access_token:
+                await turn_context.send_activity("Sign in first with !customer-login.")
+                return
+            try:
+                await turn_context.send_activity(
+                    customer_sessions_message(await p_client.list_customer_sessions())
+                )
+            except Exception as e:
+                await turn_context.send_activity(f"Could not load customer sessions: {e}")
+            return
+
+        if text.lower().startswith("!customer-resume "):
+            if not is_personal_conversation(turn_context):
+                await turn_context.send_activity("For privacy, session history is available only in a personal chat.")
+                return
+            p_client = sessions.get(conversation_id)
+            if not p_client or not p_client._customer_access_token:
+                await turn_context.send_activity("Sign in first with !customer-login.")
+                return
+            session_uid = text.split(maxsplit=1)[1].strip()
+            try:
+                owned_sessions = await p_client.list_customer_sessions()
+                if not any(item.get("uid") == session_uid for item in owned_sessions):
+                    await turn_context.send_activity(
+                        "That session is not in your customer history. Use !customer-sessions first."
+                    )
+                    return
+                resumed_client = await p_client.resume_customer_session(session_uid)
+                sessions[conversation_id] = resumed_client
+                try:
+                    await p_client.end_grpc_chat_session(send_goodbye=False)
+                finally:
+                    await p_client.close()
+                await turn_context.send_activity(
+                    f"Resumed {resumed_client.var.get('sessionName') or session_uid}."
+                )
+            except Exception as e:
+                await turn_context.send_activity(f"Could not resume customer session: {e}")
+            return
+
+        if text.lower() == "!customer-logout":
+            if not is_personal_conversation(turn_context):
+                await turn_context.send_activity("For privacy, customer session history is available only in a personal chat.")
+                return
+            p_client = sessions.get(conversation_id)
+            if not p_client or not p_client._customer_access_token:
+                await turn_context.send_activity("Not signed in to customer session history.")
+                return
+            try:
+                await p_client.logout_customer()
+                await turn_context.send_activity(
+                    "Signed out. This conversation remains linked to your customer account."
+                )
+            except Exception as e:
+                await turn_context.send_activity(f"Could not sign out: {e}")
+            return
+
         if text.lower() in ["/end", "!end"]:
             conversation_languages.pop(conversation_id, None)
             if conversation_id in sessions:

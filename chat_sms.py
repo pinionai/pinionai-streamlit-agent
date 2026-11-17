@@ -23,6 +23,7 @@ from collections import deque
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from aiohttp import web
@@ -44,6 +45,7 @@ EVENT_RETENTION_SECONDS = 86400
 # Carrier opt-out keywords: Telnyx enforces opt-out on the messaging profile, so the agent never sees these.
 OPT_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT", "START", "UNSTOP"}
 HELP_KEYWORDS = {"HELP", "INFO"}
+HISTORY_KEYWORDS = {"HISTORY", "SESSIONS"}
 
 
 def _env_json(name: str) -> dict[str, Any]:
@@ -78,6 +80,7 @@ class SmsConfig:
     help_text: str = "Reply with your question and we'll text you back. Reply STOP to opt out."
     handoff_text: str = "A member of our team will follow up with you shortly."
     error_text: str = "Sorry, we couldn't answer that just now. Please try again in a few minutes."
+    customer_history_url: str = ""
     dry_run: bool = False
     host: str = "127.0.0.1"
     port: int = 8086
@@ -106,6 +109,7 @@ class SmsConfig:
             help_text=env("SMS_HELP_TEXT") or cls.help_text,
             handoff_text=env("SMS_HANDOFF_TEXT") or cls.handoff_text,
             error_text=env("SMS_ERROR_TEXT") or cls.error_text,
+            customer_history_url=env("SMS_CUSTOMER_HISTORY_URL", "").strip(),
             dry_run=env("SMS_DRY_RUN", "").lower() in ("1", "true", "yes"),
             host=env("SMS_HOST", "127.0.0.1"),
             port=int(env("PORT", "8086")),
@@ -118,6 +122,10 @@ class SmsConfig:
             missing.append("TELNYX_API_KEY")
         if missing:
             raise ValueError(f"Missing SMS service settings: {', '.join(missing)}")
+        if config.customer_history_url:
+            parsed_history_url = urlsplit(config.customer_history_url)
+            if parsed_history_url.scheme != "https" or not parsed_history_url.netloc:
+                raise ValueError("SMS_CUSTOMER_HISTORY_URL must be an HTTPS URL")
         return config
 
 
@@ -283,6 +291,21 @@ class SmsService:
             return
         if keyword in HELP_KEYWORDS:
             await self._reply(our, their, self.config.help_text)
+            return
+        if keyword in HISTORY_KEYWORDS:
+            if self.config.customer_history_url:
+                await self._reply(
+                    our,
+                    their,
+                    f"Sign in securely to view and resume your sessions: {self.config.customer_history_url}",
+                )
+            else:
+                await self._reply(
+                    our,
+                    their,
+                    "Customer session history is available through our secure web app. "
+                    "Do not send passwords by SMS.",
+                )
             return
         if not self._within_rate(their):
             logger.warning("SMS from %s is over SMS_RATE_PER_HOUR; not answered", mask_number(their))

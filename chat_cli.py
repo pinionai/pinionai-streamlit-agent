@@ -297,6 +297,10 @@ def main():
     print("  /merge <name or uid> - merge an available account agent into this session")
     print("  /agents      - list available account agents")
     print("  /lang [code] - view or set language code (e.g. 'es', 'fr', or 'none')")
+    print("  /login       - sign in to a customer account and link this session")
+    print("  /sessions    - list this customer's saved sessions")
+    print("  /resume <uid> - resume one of this customer's saved sessions")
+    print("  /logout      - sign out of customer session history")
     print("  /end         - end chat session and exit")
     print("  /continue    - continue polling or force refresh")
     
@@ -331,6 +335,95 @@ def main():
             # show any new messages
             if poll_for_updates(client, timeout=5):
                 display_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
+            continue
+
+        if trimmed_prompt == "/login":
+            try:
+                auth_type = client.var.get("resumeSessionAuthType", "password")
+                if auth_type == "phone_otp":
+                    phone = input("Saved phone number: ").strip()
+                    challenge_id = run_coroutine_in_event_loop(
+                        client.request_customer_otp(phone)
+                    )
+                    print("If the phone number is eligible, a verification code has been sent.")
+                    code = getpass.getpass("Verification code: ").strip()
+                    run_coroutine_in_event_loop(
+                        client.verify_customer_otp(challenge_id, code)
+                    )
+                elif auth_type == "password":
+                    identifier = input("Phone, email, or customer UID: ").strip()
+                    password = getpass.getpass("Customer password: ")
+                    try:
+                        run_coroutine_in_event_loop(client.login_customer(identifier, password))
+                    finally:
+                        password = ""
+                else:
+                    print("Customer session history sign-in is disabled for this agent.")
+                    continue
+                print("Signed in. This active conversation is linked to your customer account.")
+                sessions = run_coroutine_in_event_loop(client.list_customer_sessions())
+                for session in sessions:
+                    name = session.get("name") or "Untitled session"
+                    summary = session.get("summary") or ""
+                    print(f"  {name} [{session['uid']}]")
+                    if summary:
+                        print(f"    {summary}")
+            except Exception as e:
+                print(f"Customer sign-in failed: {e}")
+            continue
+
+        if trimmed_prompt == "/sessions":
+            if not client._customer_access_token:
+                print("Sign in first with /login.")
+                continue
+            try:
+                sessions = run_coroutine_in_event_loop(client.list_customer_sessions())
+                if not sessions:
+                    print("No saved customer sessions.")
+                for session in sessions:
+                    name = session.get("name") or "Untitled session"
+                    summary = session.get("summary") or ""
+                    print(f"  {name} [{session['uid']}]")
+                    if summary:
+                        print(f"    {summary}")
+            except Exception as e:
+                print(f"Could not list customer sessions: {e}")
+            continue
+
+        if trimmed_prompt.startswith("/resume "):
+            if not client._customer_access_token:
+                print("Sign in first with /login.")
+                continue
+            session_uid = prompt.strip().split(maxsplit=1)[1]
+            try:
+                sessions = run_coroutine_in_event_loop(client.list_customer_sessions())
+                if not any(session.get("uid") == session_uid for session in sessions):
+                    print("That session is not in your customer history. Use /sessions to list available sessions.")
+                    continue
+                old_client = client
+                client = run_coroutine_in_event_loop(old_client.resume_customer_session(session_uid))
+                run_coroutine_in_event_loop(old_client.end_grpc_chat_session(send_goodbye=False))
+                run_coroutine_in_event_loop(old_client.close())
+                var = client.var
+                user_img = var.get("userImage")
+                assistant_img = var.get("assistImage")
+                if cli_language:
+                    client.var["user_language"] = cli_language
+                print(f"Resumed {client.var.get('sessionName') or session_uid}.")
+                display_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
+            except Exception as e:
+                print(f"Could not resume customer session: {e}")
+            continue
+
+        if trimmed_prompt == "/logout":
+            if not client._customer_access_token:
+                print("Not signed in to customer session history.")
+                continue
+            try:
+                run_coroutine_in_event_loop(client.logout_customer())
+                print("Signed out. This conversation remains linked to your customer account.")
+            except Exception as e:
+                print(f"Could not sign out: {e}")
             continue
 
         if trimmed_prompt == "/lang" or trimmed_prompt == "/language":

@@ -189,6 +189,10 @@ Run the CLI client:
 python chat_cli.py
 ```
 
+Customer history is optional in the CLI. Use `/login` to authenticate (the password is requested with a hidden terminal
+prompt), `/sessions` to list sessions, `/resume <uid>` to continue one, and `/logout` to revoke the customer token.
+Anonymous sessions remain unassociated until `/login`.
+
 ## Slack Deployment - Running the Slack bot: `chat_slack.py`
 
 A Slack-based client is included to allow interacting with your PinionAI agents directly from a Slack channel. It uses `slack_bolt` with Socket Mode for easy setup without needing a public endpoint.
@@ -212,6 +216,10 @@ For Slack Marketplace / App Directory submission, use the new guides:
    - **App-Level Token (`SLACK_APP_TOKEN`)**: Found under "Basic Information". Needs `connections:write` scope and must be created with the `socket_mode` scope.
 3. **Socket Mode:** Enable Socket Mode in your Slack app settings.
 4. **Event Subscriptions:** Enable Events and subscribe to `message.channels` (and `message.groups` if needed).
+5. **Customer portal command (optional):** Add the `/customer-login` slash command. Set
+   `PINION_CUSTOMER_PORTAL_URL` to the HTTPS customer sign-in/history page. The bot intentionally does not collect
+   passwords or session credentials in Slack messages. The portal manages customer history separately; the bot does not
+   link its active Slack conversation to the customer.
 
 ### Setup and Running
 
@@ -269,6 +277,8 @@ This approach works well on both Google Compute Engine and DigitalOcean droplets
 - **Private AIA Files:** If an AIA file is encrypted, the bot will ask for the `key_secret` in the next message.
 - **/end:** Use the `/end` command (as a regular message) to clear the current agent session.
 - **!end** Alternatively, if you do not want to configure a Slack command for `/end`, you can simply type `!end` as a regular message to clear your session.
+- **/customer-login:** Open the configured HTTPS customer portal to sign in and manage customer history. Customer session
+  credentials are not collected in Slack, and the active Slack conversation remains anonymous.
 
 ## Microsoft Teams Deployment - Running the Teams bot: `chat_teams.py`
 
@@ -313,6 +323,9 @@ python chat_teams.py
 - **AIA File Loading:** Upload a `.aia` file as an attachment.
 - **Private AIA Files:** Handles encrypted agents via secret key prompt.
 - **/end:** Reset the session.
+- In a **personal chat**, use `!customer-login` to open a password field, `!customer-sessions` to list linked sessions,
+  `!customer-resume <uid>` to resume one, and `!customer-logout` to revoke the customer token. These commands are disabled
+  in group chats so a customer session cannot be shared with other participants.
 
 #### Loading an Agent from an AIA File
 
