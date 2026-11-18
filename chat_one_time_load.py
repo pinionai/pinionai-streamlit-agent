@@ -1,0 +1,388 @@
+import asyncio
+import os
+import threading
+import time
+from io import StringIO
+
+import streamlit as st
+from dotenv import load_dotenv
+
+from chat_rendering import render_response
+from pinionai import AsyncPinionAIClient
+from pinionai.exceptions import PinionAIConfigurationError
+
+load_dotenv()
+
+def run_coroutine_in_event_loop(coroutine):
+    """Runs a coroutine in the app's persistent event loop."""
+    loop = get_event_loop()
+    return asyncio.run_coroutine_threadsafe(coroutine, loop).result()
+
+def get_event_loop():
+    """Gets or creates the app's persistent event loop."""
+    if "event_loop" not in st.session_state:
+        st.session_state.event_loop = asyncio.new_event_loop()
+        threading.Thread(target=st.session_state.event_loop.run_forever, daemon=True).start()
+    return st.session_state.event_loop
+
+def display_chat_messages(messages,user_img,assistant_img):
+    """Displays chat messages in the Streamlit app."""
+    chat_container = st.container()
+    with chat_container:
+        for message in messages:
+            avatar = user_img if message["role"] == "user" else assistant_img
+            with st.chat_message(message["role"], avatar=avatar):
+                st.markdown(message["content"])
+
+def poll_for_updates(client: AsyncPinionAIClient, timeout: int, http_poll_start: int = 30, http_poll_interval: int = 5):
+    """Polls for updates and returns True if a rerun is needed."""
+    start_time = time.time()
+    next_http_poll_time = start_time + http_poll_start
+
+    while time.time() - start_time < timeout:
+        # Primary check: Has a gRPC message arrived recently?
+        if (time.time() - client._grpc_last_update_time) < 2.0:
+            return True
+        # Fallback check: Poll HTTP endpoint no response in a while.
+        now = time.time()
+        if now >= next_http_poll_time:
+            try:
+                lastmodified_server, _ = run_coroutine_in_event_loop(client.get_latest_session_modification_time())
+                if lastmodified_server and lastmodified_server != client.last_session_post_modified:
+                    return True
+                # Schedule the next poll
+                next_http_poll_time = now + http_poll_interval
+            except Exception as e:
+                # Using print instead of st.warning to avoid cluttering the UI
+                print(f"Warning: Could not check for session updates: {e}")
+                # Don't hammer on failure, schedule next poll
+                next_http_poll_time = now + http_poll_interval
+        time.sleep(0.1) # Prevent busy-waiting
+    return False # Timeout reached
+
+def ensure_grpc_is_active(client: AsyncPinionAIClient):
+    """
+    For Live Agent Discussion. Checks if the gRPC client is active 
+    and starts it if not. Makes the app fork-safe.
+    """
+    if not client._grpc_stub:
+        try:
+            # print("gRPC client not active. Initializing now...")
+            is_started = run_coroutine_in_event_loop(client.start_grpc_client_listener(sender_id="user"))
+            if is_started:
+                st.info("Connecting to live agent...")
+                return True
+            else:
+                st.error("Could not connect to live agent service.")
+                return False
+        except Exception as e:
+            st.error(f"Failed to start gRPC listener: {e}")
+            return False
+    return True # Already active
+
+# --- Initialize PinionAIClient ---
+st.set_page_config(
+    page_title="PinionAI Chat",
+    page_icon="assets/favicon.ico",
+    menu_items={
+        'Get help': 'https://docs.pinionai.com/',
+        'Report a bug': 'https://www.pinionai.com/contact',
+        'About': 'Try **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.1.9a`'
+    },
+    layout="wide"
+)
+
+# env variables 
+# if "version" not in st.session_state: 
+#     st.session_state.version = None
+
+# Add state for handling private AIA files
+if 'awaiting_key_secret' not in st.session_state:
+    st.session_state.awaiting_key_secret = False
+if 'uploaded_file_bytes' not in st.session_state:
+    st.session_state.uploaded_file_bytes = None
+
+if st.session_state.awaiting_key_secret:
+    st.warning("This AIA file is private and requires a secret key to decrypt.")
+    with st.form("key_secret_form"):
+        key_secret = st.text_input("Enter the secret key:", type="password")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.form_submit_button("Unlock and Load Agent", width="stretch"):
+                if not key_secret:
+                    st.error("Please enter a secret key.")
+                else:
+                    # Clear main session state before loading new agent
+                    keys_to_keep = ["logged_in", "user_login", "user_email", "accountSelectedUId", "accountPermissions", "awaiting_key_secret", "uploaded_file_bytes"]
+                    keys_to_delete = [key for key in st.session_state.keys() if key not in keys_to_keep]
+                    for key in keys_to_delete:
+                        del st.session_state[key]
+                    
+                    with st.spinner("Decrypting and loading agent..."):
+                        try:
+                            file_bytes = st.session_state.uploaded_file_bytes
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            
+                            client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                                file_stream=stringio.read(),
+                                host_url=os.environ.get("host_url"),
+                                key_secret=key_secret,
+                                url_params=dict(st.query_params)
+                            ))
+
+                            if client:
+                                st.session_state.pinion_client = client
+                                # Clean up temp state on success
+                                st.session_state.awaiting_key_secret = False
+                                st.session_state.uploaded_file_bytes = None
+                                st.success("Agent loaded successfully!")
+                                st.rerun()
+                            else:
+                                st.error(f"Failed to load agent: {init_message}")
+                        except Exception as e:
+                            st.error(f"Failed to load agent with provided key: {e}")
+        with col2:
+            if st.form_submit_button("Cancel", width="stretch"):
+                # Clean up temp state and go back
+                st.session_state.awaiting_key_secret = False
+                st.session_state.uploaded_file_bytes = None
+                st.rerun()
+    st.stop()
+else:
+    if "pinion_client" not in st.session_state:
+        # Change st.session_state.version below to serve specific version (draft, development, test, live, archived). None loads latest in progress.
+        st.session_state.version = None 
+        if os.environ.get("agent_id"):
+            try:
+                st.session_state.pinion_client = run_coroutine_in_event_loop(AsyncPinionAIClient.create(
+                    agent_id=os.environ.get("agent_id"),
+                    host_url=os.environ.get("host_url"),
+                    client_id=os.environ.get("client_id"),
+                    client_secret=os.environ.get("client_secret"),
+                    version=st.session_state.version,
+                    url_params=dict(st.query_params)
+                ))
+                if not st.session_state.pinion_client.chat_messages and st.session_state.pinion_client.var.get("agentStart"):
+                    st.session_state.pinion_client.add_message_to_history(
+                        "assistant", st.session_state.pinion_client.var["agentStart"]
+                    )
+            except PinionAIConfigurationError as e: 
+                st.error(f"Failed to initialize PinionAI client: {e}")
+                st.stop()
+        else:
+            with st.form("agent_file"):
+                st.info("Please upload an AIA file or shortcut.")
+                uploaded_file = st.file_uploader("Upload AIA agent file or shortcut", type="aia", accept_multiple_files=False,
+                                                help="Select the File version of the agent to test.")
+                if st.form_submit_button("Load AIA Agent", help="Reset the test agent and clear the chat history."):
+                    if uploaded_file is None:
+                        st.error("Please upload an agent file first.")
+                        st.stop()
+                    else: # Session state is cleared before attempting to load
+                        # keys_to_keep = ["logged_in", "user_login", "user_email", "accountSelectedUId", "accountPermissions"]
+                        keys_to_delete = [key for key in st.session_state.keys()] # if key not in keys_to_keep]
+                        for key in keys_to_delete:
+                            del st.session_state[key]
+                        try:
+                            file_bytes = uploaded_file.getvalue()
+                            stringio = StringIO(file_bytes.decode("utf-8"))
+                            
+                            client, init_message = run_coroutine_in_event_loop(AsyncPinionAIClient.create_from_stream(
+                                file_stream=stringio.read(),
+                                host_url=os.environ.get("host_url"),
+                                url_params=dict(st.query_params)
+                                ))
+                            if init_message == 'key_secret required for private version':
+                                st.session_state.awaiting_key_secret = True
+                                st.session_state.uploaded_file_bytes = file_bytes
+                                st.rerun()
+                            elif client:
+                                st.session_state.pinion_client = client
+                                st.rerun() # Rerun to load the new agent's chat
+                            else:
+                                st.error(f"Failed to load agent: {init_message}")
+                                st.stop()
+                        except Exception as e:
+                            st.error(f"Failed to initialize PinionAI client from AIA file: {e}")
+                            st.stop()
+                else:
+                    st.stop()
+
+client: AsyncPinionAIClient = st.session_state.pinion_client
+var = client.var # Convenience to the client's var dictionary
+
+st.session_state.setdefault("customer_sessions", [])
+if st.session_state.pop("clear_customer_password", False):
+    st.session_state["customer_password"] = ""
+
+with st.sidebar:
+    st.subheader("Conversation history")
+    customer_token = getattr(client, "_customer_access_token", None)
+    has_customer_support = hasattr(client, "_customer_access_token") or hasattr(client, "login_customer")
+    if customer_token:
+        st.caption("Signed in. Only sessions linked to this customer are listed.")
+        if st.button("Refresh sessions", key="refresh_customer_sessions"):
+            try:
+                if hasattr(client, "list_customer_sessions"):
+                    st.session_state.customer_sessions = run_coroutine_in_event_loop(
+                        client.list_customer_sessions()
+                    )
+                else:
+                    st.error("Customer sessions are not supported by the current client library.")
+            except Exception as e:
+                st.error(f"Could not load previous sessions: {e}")
+        sessions = st.session_state.customer_sessions
+        if sessions:
+            session_uid = st.selectbox(
+                "Previous session",
+                options=[session["uid"] for session in sessions],
+                format_func=lambda uid: next(
+                    (
+                        f"{session.get('name') or 'Untitled session'} — {uid}"
+                        for session in sessions
+                        if session["uid"] == uid
+                    ),
+                    uid,
+                ),
+                key="customer_session_uid",
+            )
+            if st.button("Resume selected session", key="resume_customer_session"):
+                if not hasattr(client, "resume_customer_session"):
+                    st.error("Resuming customer sessions is not supported by the current client library.")
+                else:
+                    try:
+                        old_client = client
+                        client = run_coroutine_in_event_loop(
+                            client.resume_customer_session(session_uid)
+                        )
+                        st.session_state.pinion_client = client
+                        if hasattr(old_client, "end_grpc_chat_session"):
+                            run_coroutine_in_event_loop(old_client.end_grpc_chat_session(send_goodbye=False))
+                        if hasattr(old_client, "close"):
+                            run_coroutine_in_event_loop(old_client.close())
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not resume session: {e}")
+        if st.button("Sign out", key="customer_sign_out"):
+            try:
+                if hasattr(client, "logout_customer"):
+                    run_coroutine_in_event_loop(client.logout_customer())
+                st.session_state.customer_sessions = []
+                st.rerun()
+            except Exception as e:
+                st.error(f"Could not sign out: {e}")
+    elif not has_customer_support:
+        st.info("Customer session history sign-in is disabled for this agent.")
+    else:
+        with st.form("customer_sign_in_form"):
+            identifier = st.text_input("Phone, email, or customer UID", key="customer_identifier")
+            password = st.text_input("Password", type="password", key="customer_password")
+            sign_in = st.form_submit_button("Sign in")
+        if sign_in:
+            if not hasattr(client, "login_customer"):
+                st.error("Customer authentication is not supported by the current client library.")
+            else:
+                try:
+                    run_coroutine_in_event_loop(client.login_customer(identifier, password))
+                    if hasattr(client, "list_customer_sessions"):
+                        st.session_state.customer_sessions = run_coroutine_in_event_loop(
+                            client.list_customer_sessions()
+                        )
+                    st.session_state.clear_customer_password = True
+                    st.success("Signed in. This active conversation is now linked to your customer account.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not sign in: {e}")
+
+if "end_chat_clicked" not in st.session_state:
+    st.session_state.end_chat_clicked = False
+
+try:
+    # An agent without images gets Streamlit's default avatars; an empty string is not a valid image
+    assistant_img = var["assistImage"] or None
+    user_img = var["userImage"] or None
+except KeyError as e:
+    st.error(f"Error loading image URLs from agent configuration: Missing key {e}. Agent configuration might be incomplete.")
+    st.stop()
+
+if st.session_state.end_chat_clicked:
+    st.write("Your conversation has ended.")
+    st.stop()
+
+# --- UI Layout ---
+col1, col2 = st.columns([8, 1])
+with col1:
+    st.header(var["agentTitle"], divider=var["accentColor"])
+with col2:
+    if assistant_img:
+        st.image(assistant_img)
+st.write(var["agentSubtitle"])
+
+if var["transferAllowed"]:
+    with st.form(f"chat_status_form_{client.session_id or 'nosession'}"):
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.form_submit_button("Continue"):
+                st.rerun()
+        with col2:
+            if st.form_submit_button("End Chat"):
+                st.session_state.end_chat_clicked = "yes"
+                run_coroutine_in_event_loop(client.end_grpc_chat_session()) 
+                st.rerun()
+            
+# Start gRPC client listener if transfer is requested and not already started
+if client.transfer_requested:
+    ensure_grpc_is_active(client)
+
+display_chat_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
+
+# Accept user input
+if prompt := st.chat_input("Your message..."): # Placeholder, agentStart will be first message
+    client.add_message_to_history("user", prompt)
+    with st.chat_message("user", avatar=user_img):
+        st.markdown(prompt)
+
+    if client.transfer_requested:  # LIVE AGENT MODE
+        if ensure_grpc_is_active(client):
+            run_coroutine_in_event_loop(client.update_pinion_session())
+            run_coroutine_in_event_loop(client.send_grpc_message(prompt))
+            # Poll for a response from the agent before rerunning
+            if poll_for_updates(client, timeout=180):
+                st.rerun()
+            else:
+                st.warning("No new messages in the last 3 minutes. Please click Continue or End Chat.")
+    else: # AI AGENT MODE
+        with st.chat_message("assistant", avatar=assistant_img):
+            with st.spinner("Thinking..."):
+                full_ai_response_string, full_ai_file_type = run_coroutine_in_event_loop(
+                    client.process_user_input(prompt, sender="user")
+                )
+                render_response(full_ai_response_string, full_ai_file_type)
+            run_coroutine_in_event_loop(client.update_pinion_session())
+            # Handle if a next_intent was set by the AI's processing
+            if client.next_intent:
+                with st.chat_message("assistant", avatar=assistant_img):
+                    with st.spinner("Thinking..."):
+                        # Process the next_intent (user_input might be empty or the next_intent itself)
+                        full_ai_response_string, full_ai_file_type = run_coroutine_in_event_loop(
+                            client.process_user_input(user_input="", sender="user")
+                        )
+                        render_response(full_ai_response_string, full_ai_file_type)
+                    run_coroutine_in_event_loop(client.update_pinion_session())       
+        if client.transfer_requested:
+            # Start gRPC client listener if agent transfer is requested
+            if ensure_grpc_is_active(client):
+                st.info("Transfer to live agent initiated... Waiting for agent to connect.")
+                # Poll for the first message from the agent
+                if poll_for_updates(client, timeout=180):
+                    st.rerun()
+                else:
+                    st.warning("No new messages in the last 3 minutes. Please click Continue or End Chat.")
+            else:
+                st.error("Could not connect to live agent service for transfer.")
+        elif client.transfer_requested: # If transfer was already active, and AI responded (e.g. fallback)
+            if poll_for_updates(client, timeout=180):
+                st.rerun()
+            else:
+                st.warning("No new messages in the last 3 minutes. Please click Continue or End Chat.")

@@ -147,7 +147,7 @@ async def send_customer_login_card(turn_context: TurnContext) -> None:
             {
                 "type": "Input.Text",
                 "id": "identifier",
-                "label": "Phone, email, or customer UID",
+                "label": "Phone, email or ID",
                 "isRequired": True,
                 "errorMessage": "Enter your customer identifier.",
             },
@@ -207,6 +207,9 @@ class PinionAIBot(ActivityHandler):
                 p_client = await get_client(conversation_id)
                 if not p_client:
                     raise RuntimeError("No agent is available for this personal chat.")
+                if not hasattr(p_client, "login_customer"):
+                    await turn_context.send_activity("Customer authentication is not supported by the current client library.")
+                    return
                 if p_client.var.get("resumeSessionAuthType", "password") != "password":
                     await send_customer_portal_link(turn_context)
                     return
@@ -214,7 +217,11 @@ class PinionAIBot(ActivityHandler):
                     str(submitted_value.get("identifier") or "").strip(),
                     password,
                 )
-                customer_sessions = await p_client.list_customer_sessions()
+                customer_sessions = (
+                    await p_client.list_customer_sessions()
+                    if hasattr(p_client, "list_customer_sessions")
+                    else []
+                )
                 await turn_context.send_activity(
                     "Signed in. This active conversation is linked to your customer account.\n\n"
                     + customer_sessions_message(customer_sessions)
@@ -329,6 +336,10 @@ class PinionAIBot(ActivityHandler):
             if not p_client:
                 await turn_context.send_activity("No agent is available for this personal chat.")
                 return
+            has_customer_support = hasattr(p_client, "_customer_access_token") or hasattr(p_client, "login_customer")
+            if not has_customer_support:
+                await turn_context.send_activity("Customer session history sign-in is disabled for this agent.")
+                return
             auth_type = p_client.var.get("resumeSessionAuthType", "password")
             if auth_type == "password":
                 await send_customer_login_card(turn_context)
@@ -343,8 +354,11 @@ class PinionAIBot(ActivityHandler):
                 await turn_context.send_activity("For privacy, session history is available only in a personal chat.")
                 return
             p_client = sessions.get(conversation_id)
-            if not p_client or not p_client._customer_access_token:
+            if not p_client or not getattr(p_client, "_customer_access_token", None):
                 await turn_context.send_activity("Sign in first with !customer-login.")
+                return
+            if not hasattr(p_client, "list_customer_sessions"):
+                await turn_context.send_activity("Customer sessions are not supported by the current client library.")
                 return
             try:
                 await turn_context.send_activity(
@@ -359,12 +373,19 @@ class PinionAIBot(ActivityHandler):
                 await turn_context.send_activity("For privacy, session history is available only in a personal chat.")
                 return
             p_client = sessions.get(conversation_id)
-            if not p_client or not p_client._customer_access_token:
+            if not p_client or not getattr(p_client, "_customer_access_token", None):
                 await turn_context.send_activity("Sign in first with !customer-login.")
+                return
+            if not hasattr(p_client, "resume_customer_session"):
+                await turn_context.send_activity("Resuming customer sessions is not supported by the current client library.")
                 return
             session_uid = text.split(maxsplit=1)[1].strip()
             try:
-                owned_sessions = await p_client.list_customer_sessions()
+                owned_sessions = (
+                    await p_client.list_customer_sessions()
+                    if hasattr(p_client, "list_customer_sessions")
+                    else []
+                )
                 if not any(item.get("uid") == session_uid for item in owned_sessions):
                     await turn_context.send_activity(
                         "That session is not in your customer history. Use !customer-sessions first."
@@ -373,9 +394,11 @@ class PinionAIBot(ActivityHandler):
                 resumed_client = await p_client.resume_customer_session(session_uid)
                 sessions[conversation_id] = resumed_client
                 try:
-                    await p_client.end_grpc_chat_session(send_goodbye=False)
+                    if hasattr(p_client, "end_grpc_chat_session"):
+                        await p_client.end_grpc_chat_session(send_goodbye=False)
                 finally:
-                    await p_client.close()
+                    if hasattr(p_client, "close"):
+                        await p_client.close()
                 await turn_context.send_activity(
                     f"Resumed {resumed_client.var.get('sessionName') or session_uid}."
                 )
@@ -388,11 +411,12 @@ class PinionAIBot(ActivityHandler):
                 await turn_context.send_activity("For privacy, customer session history is available only in a personal chat.")
                 return
             p_client = sessions.get(conversation_id)
-            if not p_client or not p_client._customer_access_token:
+            if not p_client or not getattr(p_client, "_customer_access_token", None):
                 await turn_context.send_activity("Not signed in to customer session history.")
                 return
             try:
-                await p_client.logout_customer()
+                if hasattr(p_client, "logout_customer"):
+                    await p_client.logout_customer()
                 await turn_context.send_activity(
                     "Signed out. This conversation remains linked to your customer account."
                 )

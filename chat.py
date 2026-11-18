@@ -93,7 +93,7 @@ st.set_page_config(
     menu_items={
         'Get help': 'https://docs.pinionai.com/',
         'Report a bug': 'https://www.pinionai.com/contact',
-        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.5.1`'
+        'About': 'Use **[PinionAI](https://www.pinionai.com)** as your low-code, opinionated AI Agent Platform. Delivering controlled AI Agents that work seamlessly with existing business infrastructure, and targeting topics you desire, PinionAI performs actions, delivers information using all major models, and offers privacy and security built in. \n\n**PinionAI LLC**, All rights reserved. Version: `0.5.4`'
     },
     layout="wide"
 )
@@ -574,16 +574,26 @@ with st.sidebar:
 st.session_state.setdefault("customer_sessions", [])
 if st.session_state.pop("clear_customer_password", False):
     st.session_state["customer_password"] = ""
+    st.session_state["customer_signup_password"] = ""
 
 with st.sidebar:
     st.subheader("Conversation history")
-    if client._customer_access_token:
+    customer_token = getattr(client, "_customer_access_token", None)
+    has_customer_support = (
+        hasattr(client, "_customer_access_token")
+        or hasattr(client, "login_customer")
+        or hasattr(client, "register_customer")
+    )
+    if customer_token:
         st.caption("Signed in. Only sessions linked to this customer are listed.")
         if st.button("Refresh sessions", key="refresh_customer_sessions"):
             try:
-                st.session_state.customer_sessions = run_coroutine_in_event_loop(
-                    client.list_customer_sessions()
-                )
+                if hasattr(client, "list_customer_sessions"):
+                    st.session_state.customer_sessions = run_coroutine_in_event_loop(
+                        client.list_customer_sessions()
+                    )
+                else:
+                    st.error("Customer sessions are not supported by the current client library.")
             except Exception as e:
                 st.error(f"Could not load previous sessions: {e}")
         sessions = st.session_state.customer_sessions
@@ -593,7 +603,7 @@ with st.sidebar:
                 options=[session["uid"] for session in sessions],
                 format_func=lambda uid: next(
                     (
-                        f"{session.get('name') or 'Untitled session'} — {session['uid']}"
+                        f"{session.get('name') or 'Untitled session'} — {uid}"
                         for session in sessions
                         if session["uid"] == uid
                     ),
@@ -608,25 +618,33 @@ with st.sidebar:
             if selected_session and selected_session.get("summary"):
                 st.caption(selected_session["summary"])
             if st.button("Resume selected session", key="resume_customer_session"):
-                try:
-                    with st.spinner("Restoring conversation..."):
-                        old_client = client
-                        restored_client = run_coroutine_in_event_loop(
-                            client.resume_customer_session(session_uid)
-                        )
-                        st.session_state.pinion_client = restored_client
-                        run_coroutine_in_event_loop(old_client.end_grpc_chat_session(send_goodbye=False))
-                        run_coroutine_in_event_loop(old_client.close())
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Could not resume session: {e}")
+                if not hasattr(client, "resume_customer_session"):
+                    st.error("Resuming customer sessions is not supported by the current client library.")
+                else:
+                    try:
+                        with st.spinner("Restoring conversation..."):
+                            old_client = client
+                            restored_client = run_coroutine_in_event_loop(
+                                client.resume_customer_session(session_uid)
+                            )
+                            st.session_state.pinion_client = restored_client
+                            if hasattr(old_client, "end_grpc_chat_session"):
+                                run_coroutine_in_event_loop(old_client.end_grpc_chat_session(send_goodbye=False))
+                            if hasattr(old_client, "close"):
+                                run_coroutine_in_event_loop(old_client.close())
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not resume session: {e}")
         if st.button("Sign out", key="customer_sign_out"):
             try:
-                run_coroutine_in_event_loop(client.logout_customer())
+                if hasattr(client, "logout_customer"):
+                    run_coroutine_in_event_loop(client.logout_customer())
                 st.session_state.customer_sessions = []
                 st.rerun()
             except Exception as e:
                 st.error(f"Could not sign out: {e}")
+    elif not has_customer_support:
+        st.info("Customer session history sign-in is disabled for this agent.")
     else:
         auth_type = client.var.get("resumeSessionAuthType", "password")
         if auth_type == "phone_otp":
@@ -636,53 +654,119 @@ with st.sidebar:
                     code = st.text_input("Verification code", type="password", max_chars=6)
                     verify_code = st.form_submit_button("Verify code")
                 if verify_code:
-                    try:
-                        with st.spinner("Verifying code..."):
-                            run_coroutine_in_event_loop(
-                                client.verify_customer_otp(challenge_id, code)
-                            )
-                            st.session_state.customer_sessions = run_coroutine_in_event_loop(
-                                client.list_customer_sessions()
-                            )
-                        st.session_state.pop("customer_otp_challenge_id", None)
-                        st.success("Signed in. This active conversation is now linked to your customer account.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Could not verify phone sign-in: {e}")
+                    if not hasattr(client, "verify_customer_otp"):
+                        st.error("Customer authentication is not supported by the current client library.")
+                    else:
+                        try:
+                            with st.spinner("Verifying code..."):
+                                run_coroutine_in_event_loop(
+                                    client.verify_customer_otp(challenge_id, code)
+                                )
+                                if hasattr(client, "list_customer_sessions"):
+                                    st.session_state.customer_sessions = run_coroutine_in_event_loop(
+                                        client.list_customer_sessions()
+                                    )
+                            st.session_state.pop("customer_otp_challenge_id", None)
+                            st.success("Signed in. This active conversation is now linked to your customer account.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Could not verify phone sign-in: {e}")
                 if st.button("Request another code", key="request_another_customer_otp"):
                     st.session_state.pop("customer_otp_challenge_id", None)
                     st.rerun()
             else:
-                with st.form("customer_otp_request_form"):
-                    phone = st.text_input("Saved phone number", placeholder="+15551234567")
-                    request_code = st.form_submit_button("Send verification code")
-                if request_code:
-                    try:
-                        with st.spinner("Requesting verification code..."):
-                            st.session_state.customer_otp_challenge_id = run_coroutine_in_event_loop(
-                                client.request_customer_otp(phone)
-                            )
-                        st.info("If the phone number is eligible, a verification code has been sent.")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Could not request phone sign-in: {e}")
+                tab_signin, tab_signup = st.tabs(["Sign In", "Sign Up"])
+                with tab_signin:
+                    with st.form("customer_otp_request_form"):
+                        phone = st.text_input("Saved phone number", placeholder="+15551234567")
+                        request_code = st.form_submit_button("Send verification code")
+                    if request_code:
+                        if not hasattr(client, "request_customer_otp"):
+                            st.error("Customer authentication is not supported by the current client library.")
+                        else:
+                            try:
+                                with st.spinner("Requesting verification code..."):
+                                    st.session_state.customer_otp_challenge_id = run_coroutine_in_event_loop(
+                                        client.request_customer_otp(phone)
+                                    )
+                                st.info("If the phone number is eligible, a verification code has been sent.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Could not request phone sign-in: {e}")
+                with tab_signup:
+                    with st.form("customer_otp_register_form"):
+                        reg_phone = st.text_input("Phone number", placeholder="+15551234567", key="customer_otp_reg_phone")
+                        reg_first = st.text_input("First name", key="customer_otp_reg_first")
+                        reg_last = st.text_input("Last name", key="customer_otp_reg_last")
+                        register_code = st.form_submit_button("Sign up with phone")
+                    if register_code:
+                        if not hasattr(client, "register_customer_otp"):
+                            st.error("Customer registration is not supported by the current client library.")
+                        else:
+                            try:
+                                with st.spinner("Sending verification code..."):
+                                    st.session_state.customer_otp_challenge_id = run_coroutine_in_event_loop(
+                                        client.register_customer_otp(
+                                            reg_phone, first_name=reg_first, last_name=reg_last
+                                        )
+                                    )
+                                st.info("Verification code has been sent.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Could not register phone: {e}")
         elif auth_type == "password":
-            with st.form("customer_sign_in_form"):
-                identifier = st.text_input("Phone, email, or customer UID", key="customer_identifier")
-                password = st.text_input("Password", type="password", key="customer_password")
-                sign_in = st.form_submit_button("Sign in")
-            if sign_in:
-                try:
-                    with st.spinner("Signing in..."):
-                        run_coroutine_in_event_loop(client.login_customer(identifier, password))
-                        st.session_state.customer_sessions = run_coroutine_in_event_loop(
-                            client.list_customer_sessions()
-                        )
-                    st.session_state.clear_customer_password = True
-                    st.success("Signed in. This active conversation is now linked to your customer account.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Could not sign in: {e}")
+            tab_signin, tab_signup = st.tabs(["Sign In", "Sign Up"])
+            with tab_signin:
+                with st.form("customer_sign_in_form"):
+                    identifier = st.text_input("Phone, email or ID", key="customer_identifier")
+                    password = st.text_input("Password", type="password", key="customer_password")
+                    sign_in = st.form_submit_button("Sign in")
+                if sign_in:
+                    if not hasattr(client, "login_customer"):
+                        st.error("Customer authentication is not supported by the current client library.")
+                    else:
+                        try:
+                            with st.spinner("Signing in..."):
+                                run_coroutine_in_event_loop(client.login_customer(identifier, password))
+                                if hasattr(client, "list_customer_sessions"):
+                                    st.session_state.customer_sessions = run_coroutine_in_event_loop(
+                                        client.list_customer_sessions()
+                                    )
+                            st.session_state.clear_customer_password = True
+                            st.success("Signed in. This active conversation is now linked to your customer account.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Could not sign in: {e}")
+            with tab_signup:
+                with st.form("customer_sign_up_form"):
+                    reg_identifier = st.text_input("Phone or email", key="customer_signup_identifier")
+                    reg_password = st.text_input("Password", type="password", key="customer_signup_password")
+                    reg_first = st.text_input("First name", key="customer_signup_first")
+                    reg_last = st.text_input("Last name", key="customer_signup_last")
+                    sign_up = st.form_submit_button("Sign up")
+                if sign_up:
+                    if not hasattr(client, "register_customer"):
+                        st.error("Customer registration is not supported by the current client library.")
+                    else:
+                        try:
+                            with st.spinner("Creating account..."):
+                                run_coroutine_in_event_loop(
+                                    client.register_customer(
+                                        reg_identifier,
+                                        reg_password,
+                                        first_name=reg_first,
+                                        last_name=reg_last,
+                                    )
+                                )
+                                if hasattr(client, "list_customer_sessions"):
+                                    st.session_state.customer_sessions = run_coroutine_in_event_loop(
+                                        client.list_customer_sessions()
+                                    )
+                            st.session_state.clear_customer_password = True
+                            st.success("Signed in. This active conversation is now linked to your customer account.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Could not sign up: {e}")
         else:
             st.info("Customer session history sign-in is disabled for this agent.")
 
