@@ -16,6 +16,8 @@ __lazy_modules__ = {
 import logging
 import mimetypes
 import os
+from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 import httpx
 from aiohttp import web
@@ -60,6 +62,48 @@ conversation_languages: dict[str, str] = {}
 
 # State management for private AIA files: conversation_id -> { "file_content": ..., "awaiting_secret": True, "is_merge": False }
 pending_agents = {}
+
+# Turns in progress per client (by id). A client that a resume or !agent replaces is closed only once its
+# last turn has finished, so a message still being answered never finds its client closed under it.
+active_turns: dict[int, int] = {}
+retired_clients: dict[int, AsyncPinionAIClient] = {}
+
+
+async def _close_client(old_client: AsyncPinionAIClient) -> None:
+    """A live agent on the replaced conversation is told the customer left (as !end does); the client is
+    closed even when ending the live-agent connection fails."""
+    try:
+        if hasattr(old_client, "end_grpc_chat_session"):
+            await old_client.end_grpc_chat_session(send_goodbye=bool(getattr(old_client, "transfer_requested", "")))
+    except Exception as e:
+        logger.warning(f"Could not end the live-agent connection of a replaced conversation: {e}")
+    finally:
+        try:
+            await old_client.close()
+        except Exception as e:
+            logger.warning(f"Could not close a replaced client: {e}")
+
+
+async def retire_client(old_client: AsyncPinionAIClient) -> None:
+    if active_turns.get(id(old_client)):
+        retired_clients[id(old_client)] = old_client
+        return
+    await _close_client(old_client)
+
+
+@asynccontextmanager
+async def client_turn(p_client: AsyncPinionAIClient):
+    key = id(p_client)
+    active_turns[key] = active_turns.get(key, 0) + 1
+    try:
+        yield p_client
+    finally:
+        active_turns[key] -= 1
+        if not active_turns[key]:
+            del active_turns[key]
+            retired = retired_clients.pop(key, None)
+            if retired is not None:
+                await _close_client(retired)
 
 async def send_agent_response(turn_context: TurnContext, content: str, file_type: str) -> None:
     """Send readable responses as text and file URLs as Teams attachments."""
@@ -141,7 +185,7 @@ async def send_customer_login_card(turn_context: TurnContext) -> None:
     card = {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type": "AdaptiveCard",
-        "version": "1.4",
+        "version": "1.5",  # Input.Text style "password" is an Adaptive Cards 1.5 feature
         "body": [
             {"type": "TextBlock", "text": "Customer sign-in", "weight": "Bolder"},
             {
@@ -182,8 +226,11 @@ async def send_customer_login_card(turn_context: TurnContext) -> None:
 
 async def send_customer_portal_link(turn_context: TurnContext) -> None:
     portal_url = os.environ.get("PINION_CUSTOMER_PORTAL_URL", "").strip()
-    parsed_url = httpx.URL(portal_url)
-    if parsed_url.scheme != "https" or not parsed_url.host:
+    try:
+        parsed_url = urlsplit(portal_url)
+    except ValueError:
+        parsed_url = urlsplit("")
+    if parsed_url.scheme != "https" or not parsed_url.netloc:
         await turn_context.send_activity(
             "Customer sign-in is not configured. Contact the workspace administrator."
         )
@@ -210,7 +257,7 @@ class PinionAIBot(ActivityHandler):
                 if not hasattr(p_client, "login_customer"):
                     await turn_context.send_activity("Customer authentication is not supported by the current client library.")
                     return
-                if p_client.var.get("resumeSessionAuthType", "password") != "password":
+                if (p_client.var.get("resumeSessionAuthType") or "none") != "password":
                     await send_customer_portal_link(turn_context)
                     return
                 await p_client.login_customer(
@@ -228,8 +275,6 @@ class PinionAIBot(ActivityHandler):
                 )
             except Exception as e:
                 await turn_context.send_activity(f"Customer sign-in failed: {e}")
-            finally:
-                password = ""
             return
         
         # 1. Handle Secret Key for private AIA files
@@ -340,7 +385,7 @@ class PinionAIBot(ActivityHandler):
             if not has_customer_support:
                 await turn_context.send_activity("Customer session history sign-in is disabled for this agent.")
                 return
-            auth_type = p_client.var.get("resumeSessionAuthType", "password")
+            auth_type = p_client.var.get("resumeSessionAuthType") or "none"
             if auth_type == "password":
                 await send_customer_login_card(turn_context)
             elif auth_type == "phone_otp":
@@ -381,29 +426,21 @@ class PinionAIBot(ActivityHandler):
                 return
             session_uid = text.split(maxsplit=1)[1].strip()
             try:
-                owned_sessions = (
-                    await p_client.list_customer_sessions()
-                    if hasattr(p_client, "list_customer_sessions")
-                    else []
-                )
-                if not any(item.get("uid") == session_uid for item in owned_sessions):
+                # The API checks that the session belongs to this customer, however old it is.
+                resumed_client = await p_client.resume_customer_session(session_uid)
+            except Exception as e:
+                if getattr(e, "status_code", None) == 404:
                     await turn_context.send_activity(
                         "That session is not in your customer history. Use !customer-sessions first."
                     )
-                    return
-                resumed_client = await p_client.resume_customer_session(session_uid)
-                sessions[conversation_id] = resumed_client
-                try:
-                    if hasattr(p_client, "end_grpc_chat_session"):
-                        await p_client.end_grpc_chat_session(send_goodbye=False)
-                finally:
-                    if hasattr(p_client, "close"):
-                        await p_client.close()
-                await turn_context.send_activity(
-                    f"Resumed {resumed_client.var.get('sessionName') or session_uid}."
-                )
-            except Exception as e:
-                await turn_context.send_activity(f"Could not resume customer session: {e}")
+                else:
+                    await turn_context.send_activity(f"Could not resume customer session: {e}")
+                return
+            sessions[conversation_id] = resumed_client
+            await retire_client(p_client)
+            await turn_context.send_activity(
+                f"Resumed {resumed_client.var.get('sessionName') or session_uid}."
+            )
             return
 
         if text.lower() == "!customer-logout":
@@ -417,11 +454,13 @@ class PinionAIBot(ActivityHandler):
             try:
                 if hasattr(p_client, "logout_customer"):
                     await p_client.logout_customer()
-                await turn_context.send_activity(
-                    "Signed out. This conversation remains linked to your customer account."
-                )
             except Exception as e:
-                await turn_context.send_activity(f"Could not sign out: {e}")
+                logger.warning(f"Customer sign-out was not confirmed: {e}")
+            if getattr(p_client, "_customer_access_token", None):
+                p_client._customer_access_token = None  # older client libraries keep a token the API rejected
+            await turn_context.send_activity(
+                "Signed out. This conversation remains linked to your customer account."
+            )
             return
 
         if text.lower() in ["/end", "!end"]:
@@ -531,10 +570,7 @@ class PinionAIBot(ActivityHandler):
                 if not new_client.chat_messages and new_client.var.get("agentStart"):
                     new_client.add_message_to_history("assistant", new_client.var["agentStart"])
                 sessions[conversation_id] = new_client
-                try:
-                    await p_client.close()
-                except Exception as e:
-                    logger.warning(f"Could not close previous client for {conversation_id}: {e}")
+                await retire_client(p_client)
                 await turn_context.send_activity(
                     f"**{selected_agent['agent_name']}** loaded.\n\n{new_client.var.get('agentStart', '')}"
                 )
@@ -548,40 +584,41 @@ class PinionAIBot(ActivityHandler):
             await turn_context.send_activity("No agent is active in this conversation. Upload an `.aia` file or ensure environment variables are set.")
             return
 
-        try:
-            p_client.add_message_to_history("user", text)
+        async with client_turn(p_client):
+            try:
+                p_client.add_message_to_history("user", text)
             
-            # Resolve language: command override -> Teams activity locale -> environment -> agent var
-            locale_lang = getattr(turn_context.activity, "locale", None)
-            conv_lang = (
-                conversation_languages.get(conversation_id)
-                or locale_lang
-                or os.environ.get("LANGUAGE")
-                or os.environ.get("language")
-                or p_client.var.get("user_language")
-            )
-
-            # AI Processing
-            response_text, response_file_type = await p_client.process_user_input(
-                text, sender="user", language=conv_lang
-            )
-            await send_agent_response(turn_context, response_text, response_file_type)
-            await p_client.update_pinion_session()
-            
-            # Handle follow-up intents
-            while p_client.next_intent:
-                follow_up, follow_up_file_type = await p_client.process_user_input(
-                    "", sender="user", language=conv_lang
+                # Resolve language: command override -> Teams activity locale -> environment -> agent var
+                locale_lang = getattr(turn_context.activity, "locale", None)
+                conv_lang = (
+                    conversation_languages.get(conversation_id)
+                    or locale_lang
+                    or os.environ.get("LANGUAGE")
+                    or os.environ.get("language")
+                    or p_client.var.get("user_language")
                 )
-                await send_agent_response(turn_context, follow_up, follow_up_file_type)
+
+                # AI Processing
+                response_text, response_file_type = await p_client.process_user_input(
+                    text, sender="user", language=conv_lang
+                )
+                await send_agent_response(turn_context, response_text, response_file_type)
                 await p_client.update_pinion_session()
+            
+                # Handle follow-up intents
+                while p_client.next_intent:
+                    follow_up, follow_up_file_type = await p_client.process_user_input(
+                        "", sender="user", language=conv_lang
+                    )
+                    await send_agent_response(turn_context, follow_up, follow_up_file_type)
+                    await p_client.update_pinion_session()
                  
-        except PinionAIError as e:
-            logger.error(f"PinionAI Error: {e}")
-            await turn_context.send_activity(f"Agent Error: {e}")
-        except Exception as e:
-            logger.exception("Unexpected error during message processing")
-            await turn_context.send_activity(f"An unexpected error occurred: {e}")
+            except PinionAIError as e:
+                logger.error(f"PinionAI Error: {e}")
+                await turn_context.send_activity(f"Agent Error: {e}")
+            except Exception as e:
+                logger.exception("Unexpected error during message processing")
+                await turn_context.send_activity(f"An unexpected error occurred: {e}")
 
 BOT = PinionAIBot()
 
