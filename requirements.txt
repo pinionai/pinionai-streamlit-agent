@@ -51,7 +51,9 @@ azure-core==1.41.0
 bcrypt==5.0.0
     # via paramiko
 beartype==0.23.1
-    # via py-key-value-aio
+    # via
+    #   fastmcp-slim
+    #   py-key-value-aio
 botbuilder-core==4.17.1
     # via
     #   -r requirements.in
@@ -328,7 +330,7 @@ numpy==2.5.5
     #   streamlit
 oauthlib==4.0.1
     # via requests-oauthlib
-openai==3.54.0
+openai==3.55.0
     # via pinionai
 openapi-pydantic==0.6.0
     # via fastmcp-slim
@@ -394,7 +396,7 @@ pillow==13.0.0
     # via
     #   pinionai-chat
     #   streamlit
-pinionai==0.5.4
+pinionai==0.5.5
     # via pinionai-chat
 platformdirs==4.14.7
     # via fastmcp-slim
@@ -578,9 +580,7 @@ twilio==9.13.0
     # via pinionai
 typing-extensions==4.16.0
     # via
-    #   altair
     #   anthropic
-    #   anyio
     #   azure-core
     #   fastmcp-slim
     #   google-genai
