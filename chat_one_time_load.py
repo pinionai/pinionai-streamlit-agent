@@ -7,6 +7,7 @@ from io import StringIO
 import streamlit as st
 from dotenv import load_dotenv
 
+from chat_customer_history import render_customer_history
 from chat_rendering import render_response
 from pinionai import AsyncPinionAIClient
 from pinionai.exceptions import PinionAIConfigurationError
@@ -212,88 +213,7 @@ else:
 client: AsyncPinionAIClient = st.session_state.pinion_client
 var = client.var # Convenience to the client's var dictionary
 
-st.session_state.setdefault("customer_sessions", [])
-if st.session_state.pop("clear_customer_password", False):
-    st.session_state["customer_password"] = ""
-
-with st.sidebar:
-    st.subheader("Conversation history")
-    customer_token = getattr(client, "_customer_access_token", None)
-    has_customer_support = hasattr(client, "_customer_access_token") or hasattr(client, "login_customer")
-    if customer_token:
-        st.caption("Signed in. Only sessions linked to this customer are listed.")
-        if st.button("Refresh sessions", key="refresh_customer_sessions"):
-            try:
-                if hasattr(client, "list_customer_sessions"):
-                    st.session_state.customer_sessions = run_coroutine_in_event_loop(
-                        client.list_customer_sessions()
-                    )
-                else:
-                    st.error("Customer sessions are not supported by the current client library.")
-            except Exception as e:
-                st.error(f"Could not load previous sessions: {e}")
-        sessions = st.session_state.customer_sessions
-        if sessions:
-            session_uid = st.selectbox(
-                "Previous session",
-                options=[session["uid"] for session in sessions],
-                format_func=lambda uid: next(
-                    (
-                        f"{session.get('name') or 'Untitled session'} — {uid}"
-                        for session in sessions
-                        if session["uid"] == uid
-                    ),
-                    uid,
-                ),
-                key="customer_session_uid",
-            )
-            if st.button("Resume selected session", key="resume_customer_session"):
-                if not hasattr(client, "resume_customer_session"):
-                    st.error("Resuming customer sessions is not supported by the current client library.")
-                else:
-                    try:
-                        old_client = client
-                        client = run_coroutine_in_event_loop(
-                            client.resume_customer_session(session_uid)
-                        )
-                        st.session_state.pinion_client = client
-                        if hasattr(old_client, "end_grpc_chat_session"):
-                            run_coroutine_in_event_loop(old_client.end_grpc_chat_session(send_goodbye=False))
-                        if hasattr(old_client, "close"):
-                            run_coroutine_in_event_loop(old_client.close())
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Could not resume session: {e}")
-        if st.button("Sign out", key="customer_sign_out"):
-            try:
-                if hasattr(client, "logout_customer"):
-                    run_coroutine_in_event_loop(client.logout_customer())
-                st.session_state.customer_sessions = []
-                st.rerun()
-            except Exception as e:
-                st.error(f"Could not sign out: {e}")
-    elif not has_customer_support:
-        st.info("Customer session history sign-in is disabled for this agent.")
-    else:
-        with st.form("customer_sign_in_form"):
-            identifier = st.text_input("Phone, email, or customer UID", key="customer_identifier")
-            password = st.text_input("Password", type="password", key="customer_password")
-            sign_in = st.form_submit_button("Sign in")
-        if sign_in:
-            if not hasattr(client, "login_customer"):
-                st.error("Customer authentication is not supported by the current client library.")
-            else:
-                try:
-                    run_coroutine_in_event_loop(client.login_customer(identifier, password))
-                    if hasattr(client, "list_customer_sessions"):
-                        st.session_state.customer_sessions = run_coroutine_in_event_loop(
-                            client.list_customer_sessions()
-                        )
-                    st.session_state.clear_customer_password = True
-                    st.success("Signed in. This active conversation is now linked to your customer account.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Could not sign in: {e}")
+render_customer_history(client, run_coroutine_in_event_loop)
 
 if "end_chat_clicked" not in st.session_state:
     st.session_state.end_chat_clicked = False

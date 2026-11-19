@@ -104,6 +104,26 @@ def print_agent_response(label, content, file_type):
     else:
         print(f"{label}[{file_type} file response]")
 
+def print_customer_sessions(sessions: list[dict]) -> None:
+    if not sessions:
+        print("No saved customer sessions.")
+    for session in sessions:
+        print(f"  {session.get('name') or 'Untitled session'} [{session.get('uid')}]")
+        if session.get("summary"):
+            print(f"    {session['summary']}")
+
+async def retire_client(old_client: AsyncPinionAIClient) -> None:
+    """Ends the conversation that a resumed one replaces. A live agent on it is told the customer left, as
+    /end does, and the client is closed even when ending the live-agent connection fails."""
+    try:
+        if hasattr(old_client, "end_grpc_chat_session"):
+            await old_client.end_grpc_chat_session(send_goodbye=bool(getattr(old_client, "transfer_requested", "")))
+    except Exception as e:
+        print(f"Warning: could not end the previous conversation's live-agent connection: {e}")
+    finally:
+        if hasattr(old_client, "close"):
+            await old_client.close()
+
 def cleanup_client(client: AsyncPinionAIClient):
     """Clean up client resources, particularly the HTTP session."""
     try:
@@ -339,62 +359,47 @@ def main():
             continue
 
         if trimmed_prompt == "/login":
-            has_customer_support = hasattr(client, "_customer_access_token") or hasattr(client, "login_customer")
-            if not has_customer_support:
+            if not (hasattr(client, "_customer_access_token") or hasattr(client, "login_customer")):
                 print("Customer authentication is not supported by the current client library.")
                 continue
             try:
-                auth_type = client.var.get("resumeSessionAuthType", "password")
+                auth_type = client.var.get("resumeSessionAuthType") or "none"
                 if auth_type == "phone_otp":
                     if not hasattr(client, "request_customer_otp") or not hasattr(client, "verify_customer_otp"):
                         print("Phone authentication is not supported by the current client library.")
                         continue
                     phone = input("Saved phone number: ").strip()
-                    challenge_id = run_coroutine_in_event_loop(
-                        client.request_customer_otp(phone)
-                    )
+                    challenge_id = run_coroutine_in_event_loop(client.request_customer_otp(phone))
                     print("If the phone number is eligible, a verification code has been sent.")
                     code = getpass.getpass("Verification code: ").strip()
-                    run_coroutine_in_event_loop(
-                        client.verify_customer_otp(challenge_id, code)
-                    )
+                    run_coroutine_in_event_loop(client.verify_customer_otp(challenge_id, code))
                 elif auth_type == "password":
                     if not hasattr(client, "login_customer"):
                         print("Password authentication is not supported by the current client library.")
                         continue
                     identifier = input("Phone, email or ID: ").strip()
                     password = getpass.getpass("Customer password: ")
-                    try:
-                        run_coroutine_in_event_loop(client.login_customer(identifier, password))
-                    finally:
-                        password = ""
+                    run_coroutine_in_event_loop(client.login_customer(identifier, password))
                 else:
                     print("Customer session history sign-in is disabled for this agent.")
                     continue
                 print("Signed in. This active conversation is linked to your customer account.")
                 if hasattr(client, "list_customer_sessions"):
-                    sessions = run_coroutine_in_event_loop(client.list_customer_sessions())
-                    for session in sessions:
-                        name = session.get("name") or "Untitled session"
-                        summary = session.get("summary") or ""
-                        print(f"  {name} [{session['uid']}]")
-                        if summary:
-                            print(f"    {summary}")
+                    print_customer_sessions(run_coroutine_in_event_loop(client.list_customer_sessions()))
             except Exception as e:
                 print(f"Customer sign-in failed: {e}")
             continue
 
         if trimmed_prompt == "/register":
-            has_customer_support = (
+            if not (
                 hasattr(client, "_customer_access_token")
                 or hasattr(client, "register_customer")
                 or hasattr(client, "register_customer_otp")
-            )
-            if not has_customer_support:
+            ):
                 print("Customer registration is not supported by the current client library.")
                 continue
             try:
-                auth_type = client.var.get("resumeSessionAuthType", "password")
+                auth_type = client.var.get("resumeSessionAuthType") or "none"
                 if auth_type == "phone_otp":
                     if not hasattr(client, "register_customer_otp") or not hasattr(client, "verify_customer_otp"):
                         print("Phone registration is not supported by the current client library.")
@@ -407,9 +412,7 @@ def main():
                     )
                     print("Verification code has been sent.")
                     code = getpass.getpass("Verification code: ").strip()
-                    run_coroutine_in_event_loop(
-                        client.verify_customer_otp(challenge_id, code)
-                    )
+                    run_coroutine_in_event_loop(client.verify_customer_otp(challenge_id, code))
                 elif auth_type == "password":
                     if not hasattr(client, "register_customer"):
                         print("Password registration is not supported by the current client library.")
@@ -418,26 +421,15 @@ def main():
                     password = getpass.getpass("Password: ")
                     first_name = input("First name: ").strip()
                     last_name = input("Last name: ").strip()
-                    try:
-                        run_coroutine_in_event_loop(
-                            client.register_customer(
-                                identifier, password, first_name=first_name, last_name=last_name
-                            )
-                        )
-                    finally:
-                        password = ""
+                    run_coroutine_in_event_loop(
+                        client.register_customer(identifier, password, first_name=first_name, last_name=last_name)
+                    )
                 else:
                     print("Customer registration is disabled for this agent.")
                     continue
                 print("Registered and signed in. This active conversation is linked to your customer account.")
                 if hasattr(client, "list_customer_sessions"):
-                    sessions = run_coroutine_in_event_loop(client.list_customer_sessions())
-                    for session in sessions:
-                        name = session.get("name") or "Untitled session"
-                        summary = session.get("summary") or ""
-                        print(f"  {name} [{session['uid']}]")
-                        if summary:
-                            print(f"    {summary}")
+                    print_customer_sessions(run_coroutine_in_event_loop(client.list_customer_sessions()))
             except Exception as e:
                 print(f"Customer registration failed: {e}")
             continue
@@ -450,15 +442,7 @@ def main():
                 print("Listing customer sessions is not supported by the current client library.")
                 continue
             try:
-                sessions = run_coroutine_in_event_loop(client.list_customer_sessions())
-                if not sessions:
-                    print("No saved customer sessions.")
-                for session in sessions:
-                    name = session.get("name") or "Untitled session"
-                    summary = session.get("summary") or ""
-                    print(f"  {name} [{session['uid']}]")
-                    if summary:
-                        print(f"    {summary}")
+                print_customer_sessions(run_coroutine_in_event_loop(client.list_customer_sessions()))
             except Exception as e:
                 print(f"Could not list customer sessions: {e}")
             continue
@@ -472,29 +456,23 @@ def main():
                 continue
             session_uid = prompt.strip().split(maxsplit=1)[1]
             try:
-                sessions = (
-                    run_coroutine_in_event_loop(client.list_customer_sessions())
-                    if hasattr(client, "list_customer_sessions")
-                    else []
-                )
-                if not any(session.get("uid") == session_uid for session in sessions):
-                    print("That session is not in your customer history. Use /sessions to list available sessions.")
-                    continue
-                old_client = client
-                client = run_coroutine_in_event_loop(old_client.resume_customer_session(session_uid))
-                if hasattr(old_client, "end_grpc_chat_session"):
-                    run_coroutine_in_event_loop(old_client.end_grpc_chat_session(send_goodbye=False))
-                if hasattr(old_client, "close"):
-                    run_coroutine_in_event_loop(old_client.close())
-                var = client.var
-                user_img = var.get("userImage")
-                assistant_img = var.get("assistImage")
-                if cli_language:
-                    client.var["user_language"] = cli_language
-                print(f"Resumed {client.var.get('sessionName') or session_uid}.")
-                display_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
+                # The API checks that the session belongs to this customer, however old it is.
+                resumed_client = run_coroutine_in_event_loop(client.resume_customer_session(session_uid))
             except Exception as e:
-                print(f"Could not resume customer session: {e}")
+                if getattr(e, "status_code", None) == 404:
+                    print("That session is not in your customer history. Use /sessions to list available sessions.")
+                else:
+                    print(f"Could not resume customer session: {e}")
+                continue
+            old_client, client = client, resumed_client
+            run_coroutine_in_event_loop(retire_client(old_client))
+            var = client.var
+            user_img = var.get("userImage")
+            assistant_img = var.get("assistImage")
+            if cli_language:
+                client.var["user_language"] = cli_language
+            print(f"Resumed {client.var.get('sessionName') or session_uid}.")
+            display_messages(client.get_chat_messages_for_display(), user_img, assistant_img)
             continue
 
         if trimmed_prompt == "/logout":
@@ -504,9 +482,11 @@ def main():
             try:
                 if hasattr(client, "logout_customer"):
                     run_coroutine_in_event_loop(client.logout_customer())
-                print("Signed out. This conversation remains linked to your customer account.")
             except Exception as e:
-                print(f"Could not sign out: {e}")
+                print(f"The server could not confirm the sign-out: {e}")
+            if getattr(client, "_customer_access_token", None):
+                client._customer_access_token = None  # older client libraries keep a token the API rejected
+            print("Signed out. This conversation remains linked to your customer account.")
             continue
 
         if trimmed_prompt == "/lang" or trimmed_prompt == "/language":

@@ -292,23 +292,17 @@ class SmsService:
         if keyword in HELP_KEYWORDS:
             await self._reply(our, their, self.config.help_text)
             return
-        if keyword in HISTORY_KEYWORDS:
-            if self.config.customer_history_url:
-                await self._reply(
-                    our,
-                    their,
-                    f"Sign in securely to view and resume your sessions: {self.config.customer_history_url}",
-                )
-            else:
-                await self._reply(
-                    our,
-                    their,
-                    "Customer session history is available through our secure web app. "
-                    "Do not send passwords by SMS.",
-                )
-            return
         if not self._within_rate(their):
             logger.warning("SMS from %s is over SMS_RATE_PER_HOUR; not answered", mask_number(their))
+            return
+        # HISTORY / SESSIONS get the portal link only when a portal is configured and no person has the
+        # conversation; otherwise the word is an ordinary answer for the agent (or the person) to read.
+        if keyword in HISTORY_KEYWORDS and self.config.customer_history_url and not self._handed_off(our, their):
+            await self._reply(
+                our,
+                their,
+                f"Sign in securely to view and resume your sessions: {self.config.customer_history_url}",
+            )
             return
 
         key = (our, their)
@@ -332,6 +326,14 @@ class SmsService:
                 await self._close(key)
                 logger.info("SMS conversation with %s handed off to a person", mask_number(their))
                 await self._reply(our, their, self.config.handoff_text)
+
+    def _handed_off(self, our: str, their: str) -> bool:
+        saved = self.store.get(our, their)
+        return bool(
+            saved
+            and saved["handed_off"]
+            and time.time() - saved["last_used"] < self.config.conversation_ttl_hours * 3600
+        )
 
     def _within_rate(self, their: str) -> bool:
         now = time.time()
