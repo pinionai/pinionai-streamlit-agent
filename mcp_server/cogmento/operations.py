@@ -222,18 +222,39 @@ async def calendar_id(client: CogmentoClient, name: str | None) -> str:
     return calendars[0]["id"]
 
 
-# How far the CRM's reading of an event's times lies from UTC, per CRM. Like a call's call_time (below), start_date and
-# end_date are taken as wall-clock time in the API user's own time zone whatever offset is sent. Kept apart from the calls'
-# shift: a call is logged when it happens, an appointment can lie on the other side of a daylight-saving change.
+# How far the CRM's reading of an event's times lies from UTC, per CRM and API user (CogmentoClient.who). Like a call's
+# call_time (below), start_date and end_date are taken as wall-clock time in the API user's own time zone whatever offset is
+# sent. Kept apart from the calls' shift: a call is logged when it happens, an appointment can lie on the other side of a
+# daylight-saving change.
 _EVENT_TIME_SHIFT: dict[str, timedelta] = {}
+MAX_EVENT_WRITES = 5  # one when the shift is known; more to learn it, and to settle a time in the hour a clock change repeats
+_MINUTE = timedelta(minutes=1)
 
 
 def _stored_utc(value: Any) -> datetime | None:
     """A time the CRM answers in UTC without saying so (`2026-11-05T21:00`), or None when it answers none."""
     if not value:
         return None
-    when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    try:
+        when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError as e:
+        raise CrmError(f"the CRM answered a time that cannot be read: {value!r}") from e
     return when.replace(tzinfo=timezone.utc) if when.tzinfo is None else when.astimezone(timezone.utc)
+
+
+def _kept_at(record: dict[str, Any]) -> list[datetime | None]:
+    """The instants the CRM answers it keeps an event at: start, end."""
+    return [_stored_utc(record.get("start_date_utc")), _stored_utc(record.get("end_date_utc"))]
+
+
+def _clock_shift(record: dict[str, Any], name: str) -> timedelta | None:
+    """How far the API user's clock lay from UTC at one of an event's times, from an event the CRM answered: it carries
+    the time both ways (`start_date` on the user's clock, `start_date_utc`). None when this answer does not."""
+    try:
+        local, utc = _stored_utc(record.get(name)), _stored_utc(record.get(f"{name}_utc"))
+    except CrmError:
+        return None
+    return local - utc if local and utc else None
 
 
 async def upsert_event(client: CogmentoClient, key: str, title: str, start: str, end: str, calendar: str | None = None,
@@ -241,8 +262,14 @@ async def upsert_event(client: CogmentoClient, key: str, title: str, start: str,
                        location: str | None = None, fields: dict[str, Any] | None = None) -> dict[str, Any]:
     """Creates or updates the calendar event with this key. `start` and `end` are ISO times with their UTC offset, and the
     event is kept at those instants: the CRM reads the times it is sent as wall-clock time in its API user's zone, so
-    they are sent that way and put right from the times the CRM answers it stored."""
-    begins, ends = _aware_utc(start, "start"), _aware_utc(end, "end")
+    they are sent that way and put right from the times the CRM answers it kept. Times it does not answer are read
+    back, and an event whose kept times cannot be checked fails, where it used to pass hours off.
+
+    One instant cannot be kept: a time in the hour a clock change repeats (01:00 to 02:00 on the night the clocks go
+    back) is read by the CRM as the first of its two occurrences, so the second comes back an hour early, and sent an
+    hour later, an hour late. The earlier is kept, which reads the same on the CRM's calendar, and the answer says so
+    in `time_note`; the operation does not fail, and with it the rest of a batch."""
+    wanted = (_aware_utc(start, "start"), _aware_utc(end, "end"))
     body = _clean({"title": title, "description": description, "location": location,
                    "calendar": await calendar_id(client, calendar), **(fields or {})})
     for name, rtype, k in (("deal", "deal", deal_key), ("case", "case", case_key)):
@@ -251,22 +278,49 @@ async def upsert_event(client: CogmentoClient, key: str, title: str, start: str,
             body[name] = {"id": rid}
     existing = await client.find_one("event", "aux_id", key)
     event_id = existing["id"] if existing else None
-    base = str(client._http.base_url)
-    shifts = [_EVENT_TIME_SHIFT.get(base, timedelta(0))] * 2  # start and end apart: an event can span a daylight-saving change
-    for attempt in range(3):
-        write = {**body, "aux_id": key, "start_date": _wall_clock(begins + shifts[0]), "end_date": _wall_clock(ends + shifts[1])}
+    learned = _EVENT_TIME_SHIFT.get(client.who, timedelta(0))
+    # Start and end apart: an event can span a daylight-saving change. An event the CRM already has shows how its user's
+    # clock lies, so it is not written at a wrong time first to find out; else what the last event of this user showed.
+    shifts = [(_clock_shift(existing, name) if existing else None) or learned for name in ("start_date", "end_date")]
+    tried: tuple[list, list] = ([], [])  # per time: (the shift it was sent with, how far from the wanted instant it was kept)
+    cannot_keep: set[int] = set()
+    kept: list[datetime | None] = [None, None]
+    for _ in range(MAX_EVENT_WRITES):
+        write = {**body, "aux_id": key, "start_date": _wall_clock(wanted[0] + shifts[0]), "end_date": _wall_clock(wanted[1] + shifts[1])}
         record = await (client.update("event", event_id, write) if event_id else client.create("event", write))
         event_id = event_id or record.get("id")
-        stored = (_stored_utc(record.get("start_date_utc")), _stored_utc(record.get("end_date_utc")))
-        off = [want - got if got else timedelta(0) for want, got in zip((begins, ends), stored)]
-        if not event_id or all(abs(o) < timedelta(minutes=1) for o in off):
+        kept = _kept_at(record)
+        if None in kept and event_id:
+            kept = _kept_at(await client.get("event", event_id))
+        if None in kept:
+            raise CrmError(f"the CRM did not answer the times it keeps event {key!r} at, so they could not be checked")
+        write_again = False
+        for i, off in enumerate(want - got for want, got in zip(wanted, kept)):
+            if abs(off) < _MINUTE:
+                continue
+            # sent with another shift, it came back as far off the other way: an hour the clocks repeat
+            other = next((shift for shift, was in tried[i] if abs(was + off) < _MINUTE), None)
+            tried[i].append((shifts[i], off))
+            if other is None:
+                shifts[i] += off  # what was just sent came back shifted by this much
+                write_again = True
+            else:
+                cannot_keep.add(i)
+                if off < timedelta(0):  # kept late: the earlier of the two it is to be
+                    shifts[i] = other
+                    write_again = True
+        if not write_again:
             break
-        if attempt == 2:
-            raise CrmError(f"the CRM keeps {record.get('start_date_utc')} to {record.get('end_date_utc')} as the time of event "
-                           f"{key!r}, not {begins.isoformat()} to {ends.isoformat()}")
-        shifts = [shift + o for shift, o in zip(shifts, off)]  # what was just sent came back shifted by this much
-    _EVENT_TIME_SHIFT[base] = shifts[0]
-    return {"id": event_id, "created": existing is None}
+    else:
+        raise CrmError(f"the CRM keeps {kept[0].isoformat()} to {kept[1].isoformat()} as the time of event {key!r}, "
+                       f"not {wanted[0].isoformat()} to {wanted[1].isoformat()}")
+    _EVENT_TIME_SHIFT[client.who] = shifts[0]
+    result: dict[str, Any] = {"id": event_id, "created": existing is None}
+    if cannot_keep:
+        parts = [f"{('start', 'end')[i]} {wanted[i].isoformat()} is kept at {kept[i].isoformat()}" for i in sorted(cannot_keep)]
+        result["time_note"] = f"the CRM cannot keep a time in the hour its user's clocks repeat: {'; '.join(parts)}"
+        logger.warning("event %s: %s", key, result["time_note"])
+    return result
 
 
 async def update_record(client: CogmentoClient, record_type: str, key: str, fields: dict[str, Any], soft: bool = False) -> dict[str, Any]:
@@ -445,8 +499,9 @@ async def log_call(client: CogmentoClient, phone: str, ref: str, text: str, name
     return {"contact_id": cid, "created": created, "note_id": note.get("id")}
 
 
-# How far the CRM's reading of a call_time lies from UTC, per CRM. The CRM takes call_time as wall-clock time in its API user's
-# own time zone whatever offset is sent; the shift is learned from the time it stored and kept for the next call.
+# How far the CRM's reading of a call_time lies from UTC, per CRM and API user (CogmentoClient.who). The CRM takes call_time
+# as wall-clock time in its API user's own time zone whatever offset is sent; the shift is learned from the time it stored and
+# kept for the next call.
 _CALL_TIME_SHIFT: dict[str, timedelta] = {}
 
 
@@ -478,8 +533,7 @@ async def upsert_call(client: CogmentoClient, key: str, contact_key: str, call_t
     contact_id = await _require(client, "contact", contact_key)
     case_id = await _require(client, "case", case_key, soft=True)
     when = _aware_utc(call_time)
-    base = str(client._http.base_url)
-    shift = _CALL_TIME_SHIFT.get(base, timedelta(0))
+    shift = _CALL_TIME_SHIFT.get(client.who, timedelta(0))
     body = _clean({"type": "INCOMING" if direction == "inbound" else "CALL", "status": status, "description": description,
                    "duration": duration, "case": case_id, "tags": tags, **(fields or {})})
     body["assigned_to"] = None  # the CRM needs the key on every write; empty means its API user
@@ -506,7 +560,7 @@ async def upsert_call(client: CogmentoClient, key: str, contact_key: str, call_t
             shift += off  # what was just sent came back shifted by this much
         sent = when + shift
         await client.update("call", call_id, {"call_time": _wall_clock(sent), "assigned_to": None})
-    _CALL_TIME_SHIFT[base] = shift
+    _CALL_TIME_SHIFT[client.who] = shift
 
     def attached(call: dict[str, Any]) -> bool:
         return any((p.get("model_id") or p.get("id")) == contact_id for p in call.get("participants") or [] if isinstance(p, dict))

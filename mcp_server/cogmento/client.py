@@ -8,6 +8,7 @@ network failures are retried with backoff; 4xx answers raise `CrmError` at once.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from typing import Any
@@ -51,6 +52,9 @@ class CogmentoClient:
         auth = token if token.lower().startswith(("token ", "bearer ")) else f"Token {token}"
         self._http = httpx.AsyncClient(base_url=base + "/", headers={"Authorization": auth, "Accept": "application/json"},
                                        timeout=timeout, transport=transport, follow_redirects=False)
+        # this CRM and this API user, as a key for what is learned about them (how the user's clock lies from UTC): two
+        # keys of one CRM can belong to users in different time zones. The key itself is kept only as a digest.
+        self.who = f"{base}#{hashlib.sha256(auth.encode()).hexdigest()[:16]}"
 
     async def close(self) -> None:
         await self._http.aclose()

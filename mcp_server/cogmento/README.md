@@ -17,8 +17,18 @@ PinionAI agents: `upsert_contact`, `upsert_product`, `upsert_deal`, `set_deal_pr
   description does not say, both handled here: `GET events/` is the calendar (events in a date range, with a filter of
   its own; it answers 500 to a search by key), so an event is found through the events grid, `GET events/query/`; and
   `start_date` / `end_date` are read as wall-clock time in the API user's time zone whatever offset is sent, so `start`
-  and `end` must carry their UTC offset and the tool sends them shifted, learning the shift from the times the CRM
-  answers it stored (one more write when an event lies across a daylight-saving change from the one before it).
+  and `end` must carry their UTC offset and the tool sends them shifted. The shift is taken from the event itself when
+  the CRM already has it, else from the last event written with the same key of the same CRM, and is put right from the
+  times the CRM answers it kept: one more write for the first new event after a start, and for one that lies across a
+  daylight-saving change. Kept times the CRM does not answer are read back; an event whose kept times cannot be
+  checked fails. One instant cannot be kept: a time in the hour a clock change repeats (01:00 to 02:00 on the night
+  the clocks go back) is read as the first of its two occurrences, so the second is kept an hour early, where the
+  CRM's calendar shows the same clock time, and the answer says so in `time_note` (the batch goes on).
+- **One CRM user for events.** The events grid lists an event only to its creator, its participants and the members
+  of its calendar, unless the user may see all data (the CRM's *Data Administrator* role, `accounts.view_all_data`).
+  The tool finds its own events, since it created them. A key of another CRM user without that role would not find
+  them and would create each event a second time: keep one API user for the integration, or give the new one the role
+  before changing keys. Other records are found by any user as long as they are not private.
 - **Calls** (`upsert_call`) are real call records on the contact's Calls tab, keyed like everything else. Four things
   the CRM does that its API description does not say, all handled here: a write needs the `assigned_to` key (empty means
   the API user); `call_time` is read as wall-clock time in the API user's time zone whatever offset is sent, so the
