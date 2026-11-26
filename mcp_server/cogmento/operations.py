@@ -11,6 +11,7 @@ import logging
 import mimetypes
 import os
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -221,17 +222,51 @@ async def calendar_id(client: CogmentoClient, name: str | None) -> str:
     return calendars[0]["id"]
 
 
+# How far the CRM's reading of an event's times lies from UTC, per CRM. Like a call's call_time (below), start_date and
+# end_date are taken as wall-clock time in the API user's own time zone whatever offset is sent. Kept apart from the calls'
+# shift: a call is logged when it happens, an appointment can lie on the other side of a daylight-saving change.
+_EVENT_TIME_SHIFT: dict[str, timedelta] = {}
+
+
+def _stored_utc(value: Any) -> datetime | None:
+    """A time the CRM answers in UTC without saying so (`2026-11-05T21:00`), or None when it answers none."""
+    if not value:
+        return None
+    when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    return when.replace(tzinfo=timezone.utc) if when.tzinfo is None else when.astimezone(timezone.utc)
+
+
 async def upsert_event(client: CogmentoClient, key: str, title: str, start: str, end: str, calendar: str | None = None,
                        deal_key: str | None = None, case_key: str | None = None, description: str | None = None,
                        location: str | None = None, fields: dict[str, Any] | None = None) -> dict[str, Any]:
-    body = _clean({"title": title, "start_date": start, "end_date": end, "description": description, "location": location,
+    """Creates or updates the calendar event with this key. `start` and `end` are ISO times with their UTC offset, and the
+    event is kept at those instants: the CRM reads the times it is sent as wall-clock time in its API user's zone, so
+    they are sent that way and put right from the times the CRM answers it stored."""
+    begins, ends = _aware_utc(start, "start"), _aware_utc(end, "end")
+    body = _clean({"title": title, "description": description, "location": location,
                    "calendar": await calendar_id(client, calendar), **(fields or {})})
     for name, rtype, k in (("deal", "deal", deal_key), ("case", "case", case_key)):
         rid = await _require(client, rtype, k)
         if rid:
             body[name] = {"id": rid}
-    record, created = await client.upsert("event", "aux_id", key, body)
-    return {"id": record.get("id"), "created": created}
+    existing = await client.find_one("event", "aux_id", key)
+    event_id = existing["id"] if existing else None
+    base = str(client._http.base_url)
+    shifts = [_EVENT_TIME_SHIFT.get(base, timedelta(0))] * 2  # start and end apart: an event can span a daylight-saving change
+    for attempt in range(3):
+        write = {**body, "aux_id": key, "start_date": _wall_clock(begins + shifts[0]), "end_date": _wall_clock(ends + shifts[1])}
+        record = await (client.update("event", event_id, write) if event_id else client.create("event", write))
+        event_id = event_id or record.get("id")
+        stored = (_stored_utc(record.get("start_date_utc")), _stored_utc(record.get("end_date_utc")))
+        off = [want - got if got else timedelta(0) for want, got in zip((begins, ends), stored)]
+        if not event_id or all(abs(o) < timedelta(minutes=1) for o in off):
+            break
+        if attempt == 2:
+            raise CrmError(f"the CRM keeps {record.get('start_date_utc')} to {record.get('end_date_utc')} as the time of event "
+                           f"{key!r}, not {begins.isoformat()} to {ends.isoformat()}")
+        shifts = [shift + o for shift, o in zip(shifts, off)]  # what was just sent came back shifted by this much
+    _EVENT_TIME_SHIFT[base] = shifts[0]
+    return {"id": event_id, "created": existing is None}
 
 
 async def update_record(client: CogmentoClient, record_type: str, key: str, fields: dict[str, Any], soft: bool = False) -> dict[str, Any]:
@@ -334,12 +369,22 @@ async def attach_document(client: CogmentoClient, key: str, url: str, title: str
 
 # ----- privacy -----
 async def delete_contact(client: CogmentoClient, key: str) -> dict[str, Any]:
-    """Purges the contact with this key and the documents, tasks, cases and deals linked only to it."""
+    """Purges the contact with this key and the calls, documents, tasks, cases and deals linked only to it.
+
+    The contact's calls and documents are taken from the contact record itself (what its Calls and Documents tabs list): the
+    CRM's own purge of a contact leaves its call records behind, and it answers 500 to a search of documents by contact."""
     contact_id = await record_id(client, "contact", key)
     if not contact_id:
         return {"deleted": False}
     removed: dict[str, int] = {}
-    for record_type, field in (("document", "contact"), ("task", "contact"), ("case", "contact")):
+    contact = await client.get("contact", contact_id)
+    for record_type, listed in (("call", "calls"), ("document", "documents")):
+        for rec in contact.get(listed) or []:
+            rid = rec.get("id") if isinstance(rec, dict) else rec
+            if rid:
+                await client.delete(record_type, rid)
+                removed[record_type] = removed.get(record_type, 0) + 1
+    for record_type, field in (("task", "contact"), ("case", "contact")):
         for rec in await client.find(record_type, field, contact_id, limit=1000):
             await client.delete(record_type, rec["id"])
             removed[record_type] = removed.get(record_type, 0) + 1
@@ -377,7 +422,8 @@ def _pretty_phone(phone: str) -> str:
 
 
 async def log_call(client: CogmentoClient, phone: str, ref: str, text: str, name: str | None = None) -> dict[str, Any]:
-    """A phone call as a note on the caller's contact: the contact this phone's key (ca:phone:<number>) names, else one with
+    """Superseded by `upsert_call` (a real call record on the contact); kept for installs that still send it.
+    A phone call as a note on the caller's contact: the contact this phone's key (ca:phone:<number>) names, else one with
     this phone (a known customer's), else a new one ("Caller", the number). An existing contact keeps its name and key;
     the same call (`ref`) updates its note instead of adding another."""
     key = f"ca:phone:{phone}"
@@ -399,12 +445,85 @@ async def log_call(client: CogmentoClient, phone: str, ref: str, text: str, name
     return {"contact_id": cid, "created": created, "note_id": note.get("id")}
 
 
+# How far the CRM's reading of a call_time lies from UTC, per CRM. The CRM takes call_time as wall-clock time in its API user's
+# own time zone whatever offset is sent; the shift is learned from the time it stored and kept for the next call.
+_CALL_TIME_SHIFT: dict[str, timedelta] = {}
+
+
+def _aware_utc(value: Any, name: str = "call_time") -> datetime:
+    try:
+        when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError as e:
+        raise CrmError(f"{name} {value!r} is not an ISO date and time") from e
+    if when.tzinfo is None:
+        raise CrmError(f"{name} {value!r} needs a UTC offset")
+    return when.astimezone(timezone.utc).replace(microsecond=0)
+
+
+def _wall_clock(when: datetime) -> str:
+    return when.replace(tzinfo=None).isoformat(timespec="seconds")
+
+
+async def upsert_call(client: CogmentoClient, key: str, contact_key: str, call_time: str, direction: str = "inbound",
+                      status: str | None = None, description: str | None = None, duration: int | None = None,
+                      case_key: str | None = None, tags: list[str] | None = None, fields: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Creates or updates the call record with this key and puts it on the contact (the contact's Calls tab).
+
+    `call_time` is an ISO time with its UTC offset; `direction` is "inbound" (the CRM's INCOMING) or "outbound" (CALL);
+    `status` is free text (the CRM itself writes completed, no-answer, busy, failed); `duration` is in seconds and the CRM
+    keeps it only when its API user has the telephony_bypass setting, so the seconds also belong in `fields`. `case_key`
+    links a case when the CRM has it. A call whose contact changed (a phone lead that became a customer) moves to the new
+    contact. The contact must have a phone number: the CRM attaches a participant through one, and silently leaves out
+    a contact without, which is reported here as a failure so the event is tried again."""
+    contact_id = await _require(client, "contact", contact_key)
+    case_id = await _require(client, "case", case_key, soft=True)
+    when = _aware_utc(call_time)
+    base = str(client._http.base_url)
+    shift = _CALL_TIME_SHIFT.get(base, timedelta(0))
+    body = _clean({"type": "INCOMING" if direction == "inbound" else "CALL", "status": status, "description": description,
+                   "duration": duration, "case": case_id, "tags": tags, **(fields or {})})
+    body["assigned_to"] = None  # the CRM needs the key on every write; empty means its API user
+    participants = [{"id": contact_id, "model_type": "Contact"}]
+    existing = await client.find_one("call", "aux_id", key)
+    sent: datetime | None = None
+    if existing:
+        call_id = existing["id"]
+        await client.update("call", call_id, body)
+    else:
+        sent = when + shift
+        record = await client.create("call", {**body, "aux_id": key, "call_time": _wall_clock(sent), "participants": participants})
+        call_id = record.get("id")
+    stored: dict[str, Any] = {}
+    for attempt in range(3):
+        stored = await client.get("call", call_id)
+        got = stored.get("call_time_utc")
+        off = when - _aware_utc(got) if got else timedelta(0)
+        if abs(off) < timedelta(minutes=1):
+            break
+        if attempt == 2:
+            raise CrmError(f"the CRM keeps {got} as the time of call {key!r}, not {when.isoformat()}")
+        if sent is not None:
+            shift += off  # what was just sent came back shifted by this much
+        sent = when + shift
+        await client.update("call", call_id, {"call_time": _wall_clock(sent), "assigned_to": None})
+    _CALL_TIME_SHIFT[base] = shift
+
+    def attached(call: dict[str, Any]) -> bool:
+        return any((p.get("model_id") or p.get("id")) == contact_id for p in call.get("participants") or [] if isinstance(p, dict))
+
+    if not attached(stored):
+        await client.update("call", call_id, {"participants": participants, "assigned_to": None})  # replaces whoever was on it
+        if not attached(await client.get("call", call_id)):
+            raise CrmError(f"the CRM did not put call {key!r} on contact {contact_key!r} (the contact needs a phone number)")
+    return {"id": call_id, "created": existing is None, "contact_id": contact_id}
+
+
 # ----- batches -----
 OPERATIONS = {
     "upsert_contact": upsert_contact, "upsert_product": upsert_product, "upsert_deal": upsert_deal,
     "set_deal_products": set_deal_products, "upsert_case": upsert_case, "upsert_task": upsert_task,
     "upsert_event": upsert_event, "update_record": update_record, "add_note": add_note, "sync_notes": sync_notes,
-    "attach_document": attach_document, "delete_contact": delete_contact, "log_call": log_call,
+    "attach_document": attach_document, "delete_contact": delete_contact, "log_call": log_call, "upsert_call": upsert_call,
 }
 
 
