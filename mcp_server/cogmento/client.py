@@ -8,6 +8,7 @@ network failures are retried with backoff; 4xx answers raise `CrmError` at once.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from typing import Any
@@ -21,6 +22,9 @@ COLLECTIONS = {
     "contact": "contacts", "company": "companies", "deal": "deals", "case": "cases", "task": "tasks",
     "event": "events", "call": "calls", "document": "documents", "product": "products",
 }
+# where a record type is searched by a field, when that is not its collection: `events/` is the calendar (events in a date
+# range, with a filter of its own, and a 500 for any other); the list that takes the query builder's filter is `events/query/`
+SEARCH_PATHS = {"event": "events/query/"}
 AI_AGENT_SOURCE = 9  # aux_sources fixture: "AI Agent"
 RETRIES = 4
 
@@ -48,6 +52,9 @@ class CogmentoClient:
         auth = token if token.lower().startswith(("token ", "bearer ")) else f"Token {token}"
         self._http = httpx.AsyncClient(base_url=base + "/", headers={"Authorization": auth, "Accept": "application/json"},
                                        timeout=timeout, transport=transport, follow_redirects=False)
+        # this CRM and this API user, as a key for what is learned about them (how the user's clock lies from UTC): two
+        # keys of one CRM can belong to users in different time zones. The key itself is kept only as a digest.
+        self.who = f"{base}#{hashlib.sha256(auth.encode()).hexdigest()[:16]}"
 
     async def close(self) -> None:
         await self._http.aclose()
@@ -92,7 +99,8 @@ class CogmentoClient:
     # ----- reads -----
     async def find(self, record_type: str, field: str, value: Any, limit: int = 2) -> list[dict[str, Any]]:
         flt = json.dumps([{"and": [{"name": field, "operator": "eq", "value": value}]}])
-        payload = await self.request("GET", f"{collection(record_type)}/", params={"filter": flt, "limit": limit})
+        path = SEARCH_PATHS.get(record_type) or f"{collection(record_type)}/"
+        payload = await self.request("GET", path, params={"filter": flt, "limit": limit})
         return list(payload.get("results") or []) if isinstance(payload, dict) else []
 
     async def find_one(self, record_type: str, field: str, value: Any) -> dict[str, Any] | None:

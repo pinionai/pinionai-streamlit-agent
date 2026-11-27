@@ -100,7 +100,8 @@ async def upsert_task(key: str, title: str, contact_key: str | None = None, deal
 async def upsert_event(key: str, title: str, start: str, end: str, calendar: str | None = None, deal_key: str | None = None,
                        case_key: str | None = None, description: str | None = None, location: str | None = None,
                        fields: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Create or update the calendar event with external key `key` (start/end ISO 8601)."""
+    """Create or update the calendar event with external key `key`. `start` and `end` are ISO 8601 times with their UTC
+    offset (e.g. 2026-11-05T21:00:00Z); the event is kept at those instants whatever time zone the CRM's API user has."""
     return await _run(ops.upsert_event, key=key, title=title, start=start, end=end, calendar=calendar, deal_key=deal_key,
                       case_key=case_key, description=description, location=location, fields=fields)
 
@@ -136,6 +137,16 @@ async def attach_document(key: str, url: str, title: str, filename: str | None =
 
 
 @mcp.tool
+async def upsert_call(key: str, contact_key: str, call_time: str, direction: str = "inbound", status: str | None = None,
+                      description: str | None = None, duration: int | None = None, case_key: str | None = None,
+                      tags: list[str] | None = None, fields: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Create or update the call record with external key `key` on the contact `contact_key` (its Calls tab). `call_time` is
+    an ISO time with its UTC offset; `direction` is "inbound" or "outbound"; `duration` is in seconds."""
+    return await _run(ops.upsert_call, key=key, contact_key=contact_key, call_time=call_time, direction=direction, status=status,
+                      description=description, duration=duration, case_key=case_key, tags=tags, fields=fields)
+
+
+@mcp.tool
 async def delete_contact(key: str) -> dict[str, Any]:
     """Purge the contact with external key `key` and the records linked only to it (privacy deletion)."""
     return await _run(ops.delete_contact, key=key)
@@ -159,7 +170,8 @@ async def search(query: str, record_type: str | None = None, limit: int = 10) ->
 @mcp.tool
 async def apply_operations(operations: list[dict[str, Any]]) -> dict[str, Any]:
     """Run CRM operations in order, each {"op": "upsert_contact" | "upsert_product" | "upsert_deal" | "set_deal_products" |
-    "upsert_case" | "upsert_task" | "upsert_event" | "add_note" | "attach_document" | "delete_contact" | "log_call", ...arguments};
+    "upsert_case" | "upsert_task" | "upsert_event" | "upsert_call" | "update_record" | "add_note" | "sync_notes" |
+    "attach_document" | "delete_contact", ...arguments};
     the first failure stops the batch."""
     return await _run(ops.apply_operations, operations=operations)
 
